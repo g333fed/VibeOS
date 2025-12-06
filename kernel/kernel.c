@@ -5,6 +5,9 @@
  */
 
 #include <stdint.h>
+#include "memory.h"
+#include "string.h"
+#include "printf.h"
 
 // QEMU virt machine PL011 UART base address
 #define UART0_BASE 0x09000000
@@ -22,40 +25,63 @@ void uart_putc(char c) {
     UART_DR = c;
 }
 
-void uart_puts(const char *s) {
-    while (*s) {
-        if (*s == '\n') {
-            uart_putc('\r');
-        }
-        uart_putc(*s++);
-    }
-}
-
-void uart_puthex(uint64_t value) {
-    const char *hex = "0123456789ABCDEF";
-    uart_puts("0x");
-    for (int i = 60; i >= 0; i -= 4) {
-        uart_putc(hex[(value >> i) & 0xF]);
-    }
-}
-
 void kernel_main(void) {
-    uart_puts("\n");
-    uart_puts("  ╦  ╦╦╔╗ ╔═╗╔═╗╔═╗\n");
-    uart_puts("  ╚╗╔╝║╠╩╗║╣ ║ ║╚═╗\n");
-    uart_puts("   ╚╝ ╩╚═╝╚═╝╚═╝╚═╝\n");
-    uart_puts("\n");
-    uart_puts("VibeOS v0.1 - aarch64\n");
-    uart_puts("=====================\n\n");
-    uart_puts("[BOOT] Kernel loaded successfully!\n");
-    uart_puts("[BOOT] UART initialized.\n");
-    uart_puts("[BOOT] Running on QEMU virt machine.\n");
-    uart_puts("\n");
-    uart_puts("Welcome to VibeOS! The vibes are immaculate.\n");
-    uart_puts("\n");
+    // Raw UART test first
+    uart_putc('V');
+    uart_putc('I');
+    uart_putc('B');
+    uart_putc('E');
+    uart_putc('\r');
+    uart_putc('\n');
+
+    // Test printf with simplest possible case
+    uart_putc('1');
+    printf("test");
+    uart_putc('2');
+    printf("\n");
+    printf("  ╦  ╦╦╔╗ ╔═╗╔═╗╔═╗\n");
+    printf("  ╚╗╔╝║╠╩╗║╣ ║ ║╚═╗\n");
+    printf("   ╚╝ ╩╚═╝╚═╝╚═╝╚═╝\n");
+    printf("\n");
+    printf("VibeOS v0.1 - aarch64\n");
+    printf("=====================\n\n");
+    printf("[BOOT] Kernel loaded successfully!\n");
+    printf("[BOOT] UART initialized.\n");
+
+    // Initialize memory management
+    memory_init();
+    printf("[BOOT] Memory initialized.\n");
+    printf("       Heap: %p - %p\n", (void *)heap_start, (void *)heap_end);
+    printf("       Free: %lu MB\n", memory_free() / 1024 / 1024);
+
+    // Test malloc
+    printf("[TEST] Testing malloc...\n");
+    char *test1 = malloc(100);
+    char *test2 = malloc(200);
+    printf("       Allocated 100 bytes at: %p\n", test1);
+    printf("       Allocated 200 bytes at: %p\n", test2);
+
+    // Write something to prove it works
+    strcpy(test1, "Hi from printf!");
+    printf("       Wrote to memory: %s\n", test1);
+
+    // Test sprintf
+    char buf[64];
+    sprintf(buf, "sprintf works! 42 in hex is 0x%x", 42);
+    printf("       %s\n", buf);
+
+    // Free and check
+    free(test1);
+    free(test2);
+    printf("       Freed allocations. Free: %lu MB\n", memory_free() / 1024 / 1024);
+
+    printf("[BOOT] Running on QEMU virt machine.\n");
+    printf("\n");
+    printf("Welcome to VibeOS! The vibes are immaculate.\n");
+    printf("\n");
 
     // For now, just halt
-    uart_puts("[KERNEL] Entering idle loop...\n");
+    printf("[KERNEL] Entering idle loop...\n");
 
     while (1) {
         asm volatile("wfe");
