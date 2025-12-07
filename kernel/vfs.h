@@ -61,6 +61,12 @@ int vfs_read(vfs_node_t *file, char *buf, size_t size, size_t offset);
 int vfs_write(vfs_node_t *file, const char *buf, size_t size);
 int vfs_append(vfs_node_t *file, const char *buf, size_t size);
 
+// Delete
+int vfs_delete(const char *path);
+
+// Rename (same directory only)
+int vfs_rename(const char *path, const char *newname);
+
 // Utility
 int vfs_is_dir(vfs_node_t *node);
 int vfs_is_file(vfs_node_t *node);

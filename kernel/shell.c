@@ -69,6 +69,12 @@ static void cmd_help(void) {
 
     console_puts("  ");
     console_set_color(COLOR_GREEN, COLOR_BLACK);
+    console_puts("rm");
+    console_set_color(COLOR_WHITE, COLOR_BLACK);
+    console_puts(" <file>     - Remove file\n");
+
+    console_puts("  ");
+    console_set_color(COLOR_GREEN, COLOR_BLACK);
     console_puts("cat");
     console_set_color(COLOR_WHITE, COLOR_BLACK);
     console_puts(" <file>    - Show file contents\n");
@@ -286,6 +292,22 @@ static void cmd_touch(int argc, char *argv[]) {
     }
 }
 
+static void cmd_rm(int argc, char *argv[]) {
+    if (argc < 2) {
+        console_puts("Usage: rm <file>\n");
+        return;
+    }
+
+    int result = vfs_delete(argv[1]);
+    if (result < 0) {
+        console_set_color(COLOR_RED, COLOR_BLACK);
+        console_puts("rm: cannot remove '");
+        console_puts(argv[1]);
+        console_puts("'\n");
+        console_set_color(COLOR_WHITE, COLOR_BLACK);
+    }
+}
+
 static void cmd_cat(int argc, char *argv[]) {
     if (argc < 2) {
         console_puts("Usage: cat <file>\n");
@@ -465,6 +487,8 @@ static void execute_command(char *cmd) {
         cmd_mkdir(argc, argv);
     } else if (str_eq(argv[0], "touch")) {
         cmd_touch(argc, argv);
+    } else if (str_eq(argv[0], "rm")) {
+        cmd_rm(argc, argv);
     } else if (str_eq(argv[0], "cat")) {
         cmd_cat(argc, argv);
     } else if (str_eq(argv[0], "vi")) {

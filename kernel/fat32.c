@@ -1075,3 +1075,31 @@ int fat32_delete(const char *path) {
 
     return write_cluster(entry_cluster, cluster_buf);
 }
+
+int fat32_rename(const char *oldpath, const char *newname) {
+    if (!fs_initialized) return -1;
+
+    char filename[256];
+    uint32_t parent_cluster;
+
+    if (parse_parent_path(oldpath, &parent_cluster, filename) < 0) {
+        return -1;
+    }
+
+    // Find the existing entry
+    uint32_t entry_cluster, entry_offset;
+    fat32_dirent_t *entry = find_entry_in_dir(parent_cluster, filename, &entry_cluster, &entry_offset);
+    if (!entry) return -1;
+
+    // Read the cluster containing the entry
+    if (read_cluster(entry_cluster, cluster_buf) < 0) {
+        return -1;
+    }
+
+    // Update the name in the entry
+    uint8_t *e = cluster_buf + (entry_offset * 32);
+    str_to_fat_name(newname, (char *)e);
+
+    // Write back
+    return write_cluster(entry_cluster, cluster_buf);
+}

@@ -103,12 +103,18 @@ user: $(USER_ELFS)
 # Install userspace programs to disk image
 install-user: user $(DISK_IMG)
 	@echo "Installing userspace programs to disk..."
-	@hdiutil attach $(DISK_IMG) > /dev/null
+	@hdiutil attach $(DISK_IMG) -nobrowse -mountpoint /tmp/vibeos_mount > /dev/null
 	@for prog in $(USER_PROGS); do \
-		cp $(USER_BUILD_DIR)/$$prog.elf /Volumes/VIBEOS/bin/$$prog; \
+		cp $(USER_BUILD_DIR)/$$prog.elf /tmp/vibeos_mount/bin/$$prog; \
 		echo "  Installed /bin/$$prog"; \
 	done
-	@hdiutil detach /Volumes/VIBEOS > /dev/null
+	@dot_clean /tmp/vibeos_mount 2>/dev/null || true
+	@find /tmp/vibeos_mount -name '._*' -delete 2>/dev/null || true
+	@find /tmp/vibeos_mount -name '.DS_Store' -delete 2>/dev/null || true
+	@rm -rf /tmp/vibeos_mount/.fseventsd 2>/dev/null || true
+	@rm -rf /tmp/vibeos_mount/.Spotlight-V100 2>/dev/null || true
+	@rm -rf /tmp/vibeos_mount/.Trashes 2>/dev/null || true
+	@hdiutil detach /tmp/vibeos_mount > /dev/null
 	@echo "Done!"
 
 # Link kernel (no embedded userspace - programs are on disk)
@@ -136,13 +142,16 @@ $(DISK_IMG):
 		newfs_msdos -F 32 -v VIBEOS $$DISK_DEV && \
 		hdiutil detach $$DISK_DEV
 	@echo "Creating directory structure..."
-	@hdiutil attach $(DISK_IMG) > /dev/null
-	@mkdir -p /Volumes/VIBEOS/home/user
-	@mkdir -p /Volumes/VIBEOS/bin
-	@mkdir -p /Volumes/VIBEOS/etc
-	@mkdir -p /Volumes/VIBEOS/tmp
-	@echo "Welcome to VibeOS!" > /Volumes/VIBEOS/etc/motd
-	@hdiutil detach /Volumes/VIBEOS > /dev/null
+	@hdiutil attach $(DISK_IMG) -nobrowse -mountpoint /tmp/vibeos_mount > /dev/null
+	@mkdir -p /tmp/vibeos_mount/home/user
+	@mkdir -p /tmp/vibeos_mount/bin
+	@mkdir -p /tmp/vibeos_mount/etc
+	@mkdir -p /tmp/vibeos_mount/tmp
+	@echo "Welcome to VibeOS!" > /tmp/vibeos_mount/etc/motd
+	@dot_clean /tmp/vibeos_mount 2>/dev/null || true
+	@find /tmp/vibeos_mount -name '._*' -delete 2>/dev/null || true
+	@find /tmp/vibeos_mount -name '.DS_Store' -delete 2>/dev/null || true
+	@hdiutil detach /tmp/vibeos_mount > /dev/null
 	@echo ""
 	@echo "========================================="
 	@echo "  Disk image created: $(DISK_IMG)"

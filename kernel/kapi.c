@@ -98,6 +98,31 @@ static void *kapi_mkdir(const char *path) {
     return (void *)vfs_mkdir(path);
 }
 
+// Wrapper for delete
+static int kapi_delete(const char *path) {
+    return vfs_delete(path);
+}
+
+// Wrapper for rename
+static int kapi_rename(const char *path, const char *newname) {
+    return vfs_rename(path, newname);
+}
+
+// Wrapper for readdir
+static int kapi_readdir(void *dir, int index, char *name, size_t name_size, uint8_t *type) {
+    return vfs_readdir((vfs_node_t *)dir, index, name, name_size, type);
+}
+
+// Wrapper for set_cwd
+static int kapi_set_cwd(const char *path) {
+    return vfs_set_cwd(path);
+}
+
+// Wrapper for get_cwd
+static int kapi_get_cwd(char *buf, size_t size) {
+    return vfs_get_cwd_path(buf, size);
+}
+
 void kapi_init(void) {
     kapi.version = KAPI_VERSION;
 
@@ -127,6 +152,11 @@ void kapi_init(void) {
     kapi.is_dir = kapi_is_dir;
     kapi.create = kapi_create;
     kapi.mkdir = kapi_mkdir;
+    kapi.delete = kapi_delete;
+    kapi.rename = kapi_rename;
+    kapi.readdir = kapi_readdir;
+    kapi.set_cwd = kapi_set_cwd;
+    kapi.get_cwd = kapi_get_cwd;
 
     // Process
     kapi.exit = kapi_exit;

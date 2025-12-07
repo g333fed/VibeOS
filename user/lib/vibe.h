@@ -41,6 +41,11 @@ typedef struct kapi {
     int   (*is_dir)(void *node);
     void *(*create)(const char *path);
     void *(*mkdir)(const char *path);
+    int   (*delete)(const char *path);
+    int   (*rename)(const char *path, const char *newname);
+    int   (*readdir)(void *dir, int index, char *name, size_t name_size, uint8_t *type);
+    int   (*set_cwd)(const char *path);
+    int   (*get_cwd)(char *buf, size_t size);
 
     // Process
     void (*exit)(int status);

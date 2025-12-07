@@ -191,10 +191,65 @@ static void draw_calc_icon(int x, int y, int highlighted) {
     }
 }
 
+// ============ Folder Icon (32x32 bitmap) ============
+
+static const uint8_t folder_icon[32][32] = {
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,1,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0},
+    {0,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0},
+    {0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+};
+
+// Colors: 0=transparent, 1=black (outline), 2=yellow (folder body)
+static void draw_folder_icon(int x, int y, int highlighted) {
+    for (int row = 0; row < 32; row++) {
+        for (int col = 0; col < 32; col++) {
+            uint8_t p = folder_icon[row][col];
+            uint32_t color;
+            switch (p) {
+                case 0: continue; // transparent
+                case 1: color = COLOR_BLACK; break;
+                case 2: color = highlighted ? 0x00FFE060 : 0x00FFCC00; break; // yellow
+                default: continue;
+            }
+            bb_put_pixel(x + col, y + row, color);
+        }
+    }
+}
+
 // ============ Dock ============
 
 #define DOCK_APP_CALC 0
-#define DOCK_APP_COUNT 1
+#define DOCK_APP_FILES 1
+#define DOCK_APP_COUNT 2
 
 static int dock_hover = -1;
 
@@ -214,9 +269,12 @@ static void draw_dock(void) {
 
     // Draw calculator icon
     draw_calc_icon(start_x, icon_y, dock_hover == DOCK_APP_CALC);
-
-    // Label under icon (centered)
     bb_draw_string(start_x, icon_y + DOCK_ICON_SIZE + 2, "Calc", COLOR_BLACK, 0x00C0C0C0);
+
+    // Draw files icon
+    int files_x = start_x + DOCK_ICON_SIZE + DOCK_PADDING;
+    draw_folder_icon(files_x, icon_y, dock_hover == DOCK_APP_FILES);
+    bb_draw_string(files_x - 4, icon_y + DOCK_ICON_SIZE + 2, "Files", COLOR_BLACK, 0x00C0C0C0);
 }
 
 static int dock_hit_test(int mx, int my) {
@@ -230,6 +288,12 @@ static int dock_hit_test(int mx, int my) {
     // Check calculator icon
     if (point_in_rect(mx, my, start_x, icon_y, DOCK_ICON_SIZE, DOCK_ICON_SIZE)) {
         return DOCK_APP_CALC;
+    }
+
+    // Check files icon
+    int files_x = start_x + DOCK_ICON_SIZE + DOCK_PADDING;
+    if (point_in_rect(mx, my, files_x, icon_y, DOCK_ICON_SIZE, DOCK_ICON_SIZE)) {
+        return DOCK_APP_FILES;
     }
 
     return -1;
@@ -486,6 +550,461 @@ static void open_calculator(void) {
     int h = 260;
 
     calc_window = create_window(100, 50, w, h, "Calculator", draw_calc_content);
+}
+
+// ============ File Explorer State ============
+
+#define FILES_MAX_ENTRIES 32
+#define FILES_ENTRY_HEIGHT 18
+#define FILES_PATH_MAX 256
+
+static int files_window = -1;
+static char files_path[FILES_PATH_MAX] = "/";
+static char files_entries[FILES_MAX_ENTRIES][64];
+static uint8_t files_types[FILES_MAX_ENTRIES];  // 1=file, 2=dir
+static int files_count = 0;
+static int files_selected = -1;
+static int files_scroll = 0;
+
+// Context menu state
+static int context_menu_open = 0;
+static int context_menu_x = 0;
+static int context_menu_y = 0;
+#define CONTEXT_MENU_W 120
+#define CONTEXT_MENU_ITEM_H 20
+#define CONTEXT_MENU_ITEMS 4  // New File, New Folder, Rename, Delete
+
+// Rename mode state
+static int rename_mode = 0;
+static int rename_index = -1;
+static char rename_buf[64];
+static int rename_cursor = 0;
+
+// String copy helper
+static void str_copy(char *dst, const char *src, int max) {
+    int i = 0;
+    while (src[i] && i < max - 1) {
+        dst[i] = src[i];
+        i++;
+    }
+    dst[i] = '\0';
+}
+
+// String compare helper
+static int str_equal(const char *a, const char *b) {
+    while (*a && *b) {
+        if (*a != *b) return 0;
+        a++;
+        b++;
+    }
+    return *a == *b;
+}
+
+// String length helper
+static int str_len(const char *s) {
+    int len = 0;
+    while (s[len]) len++;
+    return len;
+}
+
+static void files_refresh(void) {
+    files_count = 0;
+    files_selected = -1;
+
+    void *dir = api->open(files_path);
+    if (!dir || !api->is_dir(dir)) {
+        return;
+    }
+
+    // Read directory entries
+    char name[64];
+    uint8_t type;
+    int i = 0;
+    while (files_count < FILES_MAX_ENTRIES && api->readdir(dir, i, name, sizeof(name), &type) == 0) {
+        str_copy(files_entries[files_count], name, 64);
+        files_types[files_count] = type;
+        files_count++;
+        i++;
+    }
+}
+
+static void files_navigate(const char *name) {
+    if (str_equal(name, "..")) {
+        // Go up one level
+        if (str_equal(files_path, "/")) return;  // Already at root
+
+        // Find last slash
+        int last_slash = 0;
+        for (int i = 0; files_path[i]; i++) {
+            if (files_path[i] == '/') last_slash = i;
+        }
+
+        if (last_slash == 0) {
+            // Going to root
+            files_path[0] = '/';
+            files_path[1] = '\0';
+        } else {
+            files_path[last_slash] = '\0';
+        }
+    } else {
+        // Navigate into directory
+        int path_len = str_len(files_path);
+        if (path_len + 1 + str_len(name) < FILES_PATH_MAX - 1) {
+            if (path_len > 1) {  // Not root
+                files_path[path_len] = '/';
+                str_copy(files_path + path_len + 1, name, FILES_PATH_MAX - path_len - 1);
+            } else {
+                files_path[1] = '\0';
+                str_copy(files_path + 1, name, FILES_PATH_MAX - 1);
+            }
+        }
+    }
+
+    files_scroll = 0;
+    files_refresh();
+}
+
+static void draw_files_content(window_t *win) {
+    int x = win->x + 4;
+    int y = win->y + TITLE_HEIGHT + 4;
+    int w = win->w - 8;
+    int content_h = win->h - TITLE_HEIGHT - 8;
+
+    // Path bar background
+    bb_fill_rect(x, y, w, 18, 0x00E0E0E0);
+    bb_rect_outline(x, y, w, 18, COLOR_BLACK);
+
+    // Truncate path to fit
+    char display_path[40];
+    int path_len = str_len(files_path);
+    if (path_len > 35) {
+        display_path[0] = '.';
+        display_path[1] = '.';
+        display_path[2] = '.';
+        str_copy(display_path + 3, files_path + path_len - 32, 37);
+    } else {
+        str_copy(display_path, files_path, 40);
+    }
+    bb_draw_string(x + 4, y + 2, display_path, COLOR_BLACK, 0x00E0E0E0);
+
+    // File list area
+    int list_y = y + 22;
+    int list_h = content_h - 26;
+    bb_fill_rect(x, list_y, w, list_h, COLOR_WHITE);
+    bb_rect_outline(x, list_y, w, list_h, COLOR_BLACK);
+
+    // Draw ".." for going up (unless at root)
+    int entry_y = list_y + 2;
+    int visible_entries = (list_h - 4) / FILES_ENTRY_HEIGHT;
+
+    if (!str_equal(files_path, "/")) {
+        int is_selected = (files_selected == -2);  // -2 means ".." is selected
+        uint32_t bg = is_selected ? 0x000066CC : COLOR_WHITE;
+        uint32_t fg = is_selected ? COLOR_WHITE : COLOR_BLACK;
+        bb_fill_rect(x + 2, entry_y, w - 4, FILES_ENTRY_HEIGHT, bg);
+        bb_draw_string(x + 22, entry_y + 1, "..", fg, bg);
+
+        // Folder icon for parent
+        bb_fill_rect(x + 4, entry_y + 2, 14, 12, 0x00FFCC00);
+        bb_rect_outline(x + 4, entry_y + 2, 14, 12, COLOR_BLACK);
+
+        entry_y += FILES_ENTRY_HEIGHT;
+        visible_entries--;
+    }
+
+    // Draw file entries
+    for (int i = files_scroll; i < files_count && visible_entries > 0; i++) {
+        int is_selected = (files_selected == i);
+        int is_renaming = (rename_mode && rename_index == i);
+        uint32_t bg = is_selected ? 0x000066CC : COLOR_WHITE;
+        uint32_t fg = is_selected ? COLOR_WHITE : COLOR_BLACK;
+
+        bb_fill_rect(x + 2, entry_y, w - 4, FILES_ENTRY_HEIGHT, bg);
+
+        // Icon - folder or file
+        if (files_types[i] == 2) {
+            // Folder icon (mini)
+            bb_fill_rect(x + 4, entry_y + 2, 14, 12, 0x00FFCC00);
+            bb_rect_outline(x + 4, entry_y + 2, 14, 12, COLOR_BLACK);
+        } else {
+            // File icon (mini)
+            bb_fill_rect(x + 4, entry_y + 2, 12, 14, COLOR_WHITE);
+            bb_rect_outline(x + 4, entry_y + 2, 12, 14, COLOR_BLACK);
+            bb_hline(x + 6, entry_y + 5, 8, 0x00808080);
+            bb_hline(x + 6, entry_y + 8, 8, 0x00808080);
+            bb_hline(x + 6, entry_y + 11, 6, 0x00808080);
+        }
+
+        if (is_renaming) {
+            // Draw rename text box
+            bb_fill_rect(x + 20, entry_y, w - 24, FILES_ENTRY_HEIGHT, COLOR_WHITE);
+            bb_rect_outline(x + 20, entry_y, w - 24, FILES_ENTRY_HEIGHT, COLOR_BLACK);
+            bb_draw_string(x + 22, entry_y + 1, rename_buf, COLOR_BLACK, COLOR_WHITE);
+            // Draw cursor
+            int cursor_x = x + 22 + rename_cursor * FONT_WIDTH;
+            bb_vline(cursor_x, entry_y + 2, FILES_ENTRY_HEIGHT - 4, COLOR_BLACK);
+        } else {
+            // Truncate name if too long
+            char display_name[28];
+            int name_len = str_len(files_entries[i]);
+            if (name_len > 25) {
+                int j;
+                for (j = 0; j < 22; j++) display_name[j] = files_entries[i][j];
+                display_name[22] = '.';
+                display_name[23] = '.';
+                display_name[24] = '.';
+                display_name[25] = '\0';
+            } else {
+                str_copy(display_name, files_entries[i], 28);
+            }
+
+            bb_draw_string(x + 22, entry_y + 1, display_name, fg, bg);
+        }
+
+        entry_y += FILES_ENTRY_HEIGHT;
+        visible_entries--;
+    }
+}
+
+static int files_entry_at(window_t *win, int mx, int my) {
+    int x = win->x + 4;
+    int y = win->y + TITLE_HEIGHT + 4 + 22;  // After path bar
+    int w = win->w - 8;
+    int content_h = win->h - TITLE_HEIGHT - 8 - 26;
+
+    // Check if in list area
+    if (!point_in_rect(mx, my, x, y, w, content_h)) {
+        return -999;  // Not in list
+    }
+
+    int entry_y = y + 2;
+    int idx = 0;
+
+    // Check ".." entry
+    if (!str_equal(files_path, "/")) {
+        if (my >= entry_y && my < entry_y + FILES_ENTRY_HEIGHT) {
+            return -2;  // ".." entry
+        }
+        entry_y += FILES_ENTRY_HEIGHT;
+        idx = 0;
+    }
+
+    // Check file entries
+    for (int i = files_scroll; i < files_count; i++) {
+        if (my >= entry_y && my < entry_y + FILES_ENTRY_HEIGHT) {
+            return i;
+        }
+        entry_y += FILES_ENTRY_HEIGHT;
+    }
+
+    return -999;  // No entry hit
+}
+
+static void open_files(void) {
+    // Check if already open
+    if (files_window >= 0 && windows[files_window].visible) {
+        focused_window = files_window;
+        return;
+    }
+
+    // Start at root
+    str_copy(files_path, "/", FILES_PATH_MAX);
+    files_scroll = 0;
+    files_refresh();
+
+    files_window = create_window(150, 60, 280, 320, "Files", draw_files_content);
+}
+
+// ============ Context Menu ============
+
+static void draw_context_menu(void) {
+    if (!context_menu_open) return;
+
+    int x = context_menu_x;
+    int y = context_menu_y;
+    int h = CONTEXT_MENU_ITEM_H * CONTEXT_MENU_ITEMS + 4;
+
+    // Make sure menu stays on screen
+    if (x + CONTEXT_MENU_W > (int)screen_width) x = screen_width - CONTEXT_MENU_W - 2;
+    if (y + h > (int)screen_height - DOCK_HEIGHT) y = screen_height - DOCK_HEIGHT - h - 2;
+
+    // Shadow
+    bb_fill_rect(x + 2, y + 2, CONTEXT_MENU_W, h, 0x00404040);
+
+    // Background
+    bb_fill_rect(x, y, CONTEXT_MENU_W, h, COLOR_WHITE);
+    bb_rect_outline(x, y, CONTEXT_MENU_W, h, COLOR_BLACK);
+
+    // Menu items
+    int item_y = y + 2;
+    uint32_t enabled = COLOR_BLACK;
+    uint32_t disabled = 0x00808080;
+
+    // New File
+    bb_draw_string(x + 8, item_y + 2, "New File", enabled, COLOR_WHITE);
+    item_y += CONTEXT_MENU_ITEM_H;
+
+    // New Folder
+    bb_draw_string(x + 8, item_y + 2, "New Folder", enabled, COLOR_WHITE);
+    item_y += CONTEXT_MENU_ITEM_H;
+
+    // Rename (only if something selected)
+    bb_draw_string(x + 8, item_y + 2, "Rename", files_selected >= 0 ? enabled : disabled, COLOR_WHITE);
+    item_y += CONTEXT_MENU_ITEM_H;
+
+    // Delete (only if something selected)
+    bb_draw_string(x + 8, item_y + 2, "Delete", files_selected >= 0 ? enabled : disabled, COLOR_WHITE);
+}
+
+static int context_menu_hit_test(int mx, int my) {
+    if (!context_menu_open) return -1;
+
+    int x = context_menu_x;
+    int y = context_menu_y;
+    int h = CONTEXT_MENU_ITEM_H * CONTEXT_MENU_ITEMS + 4;
+
+    // Adjust position same as draw
+    if (x + CONTEXT_MENU_W > (int)screen_width) x = screen_width - CONTEXT_MENU_W - 2;
+    if (y + h > (int)screen_height - DOCK_HEIGHT) y = screen_height - DOCK_HEIGHT - h - 2;
+
+    if (!point_in_rect(mx, my, x, y, CONTEXT_MENU_W, h)) {
+        return -1;  // Outside menu
+    }
+
+    int rel_y = my - y - 2;
+    int item = rel_y / CONTEXT_MENU_ITEM_H;
+    if (item >= 0 && item < CONTEXT_MENU_ITEMS) {
+        return item;
+    }
+    return -1;
+}
+
+// Generate unique filename
+static int files_gen_name(char *buf, int bufsize, const char *prefix, const char *ext) {
+    // Try "prefix" first, then "prefix 2", "prefix 3", etc.
+    for (int n = 1; n < 100; n++) {
+        if (n == 1) {
+            str_copy(buf, prefix, bufsize);
+            if (ext[0]) {
+                int len = str_len(buf);
+                buf[len] = '.';
+                str_copy(buf + len + 1, ext, bufsize - len - 1);
+            }
+        } else {
+            // Build "prefix N.ext"
+            int i = 0;
+            for (int j = 0; prefix[j] && i < bufsize - 10; j++) buf[i++] = prefix[j];
+            buf[i++] = ' ';
+            if (n >= 10) buf[i++] = '0' + (n / 10);
+            buf[i++] = '0' + (n % 10);
+            if (ext[0]) {
+                buf[i++] = '.';
+                for (int j = 0; ext[j] && i < bufsize - 1; j++) buf[i++] = ext[j];
+            }
+            buf[i] = '\0';
+        }
+
+        // Check if exists
+        int exists = 0;
+        for (int j = 0; j < files_count; j++) {
+            if (str_equal(files_entries[j], buf)) {
+                exists = 1;
+                break;
+            }
+        }
+        if (!exists) return 1;  // Found unique name
+    }
+    return 0;  // Failed
+}
+
+static void context_menu_action(int item) {
+    char fullpath[FILES_PATH_MAX];
+    char newname[64];
+
+    if (item == 0) {
+        // New File
+        if (!files_gen_name(newname, 64, "Untitled", "txt")) return;
+
+        // Build full path
+        int plen = str_len(files_path);
+        if (plen == 1) {
+            fullpath[0] = '/';
+            str_copy(fullpath + 1, newname, FILES_PATH_MAX - 1);
+        } else {
+            str_copy(fullpath, files_path, FILES_PATH_MAX);
+            fullpath[plen] = '/';
+            str_copy(fullpath + plen + 1, newname, FILES_PATH_MAX - plen - 1);
+        }
+
+        api->create(fullpath);
+        files_refresh();
+    } else if (item == 1) {
+        // New Folder
+        if (!files_gen_name(newname, 64, "New Folder", "")) return;
+
+        int plen = str_len(files_path);
+        if (plen == 1) {
+            fullpath[0] = '/';
+            str_copy(fullpath + 1, newname, FILES_PATH_MAX - 1);
+        } else {
+            str_copy(fullpath, files_path, FILES_PATH_MAX);
+            fullpath[plen] = '/';
+            str_copy(fullpath + plen + 1, newname, FILES_PATH_MAX - plen - 1);
+        }
+
+        api->mkdir(fullpath);
+        files_refresh();
+    } else if (item == 2 && files_selected >= 0) {
+        // Rename - enter rename mode
+        rename_mode = 1;
+        rename_index = files_selected;
+        str_copy(rename_buf, files_entries[files_selected], 64);
+        rename_cursor = str_len(rename_buf);
+    } else if (item == 3 && files_selected >= 0) {
+        // Delete selected file
+        int plen = str_len(files_path);
+        if (plen == 1) {
+            fullpath[0] = '/';
+            str_copy(fullpath + 1, files_entries[files_selected], FILES_PATH_MAX - 1);
+        } else {
+            str_copy(fullpath, files_path, FILES_PATH_MAX);
+            fullpath[plen] = '/';
+            str_copy(fullpath + plen + 1, files_entries[files_selected], FILES_PATH_MAX - plen - 1);
+        }
+
+        api->delete(fullpath);
+        files_refresh();
+    }
+}
+
+// Commit rename operation
+static void files_commit_rename(void) {
+    if (!rename_mode || rename_index < 0) return;
+
+    // Don't rename if name unchanged or empty
+    if (rename_buf[0] == '\0' || str_equal(rename_buf, files_entries[rename_index])) {
+        rename_mode = 0;
+        return;
+    }
+
+    char oldpath[FILES_PATH_MAX];
+    int plen = str_len(files_path);
+
+    // Build old path
+    if (plen == 1) {
+        oldpath[0] = '/';
+        str_copy(oldpath + 1, files_entries[rename_index], FILES_PATH_MAX - 1);
+    } else {
+        str_copy(oldpath, files_path, FILES_PATH_MAX);
+        oldpath[plen] = '/';
+        str_copy(oldpath + plen + 1, files_entries[rename_index], FILES_PATH_MAX - plen - 1);
+    }
+
+    // Use proper rename (works for both files and directories)
+    api->rename(oldpath, rename_buf);
+
+    rename_mode = 0;
+    files_refresh();
 }
 
 // ============ Apple Icon (12x14 bitmap) ============
@@ -780,6 +1299,7 @@ static void redraw_all(int mouse_x, int mouse_y) {
     draw_all_windows_frames();
     draw_all_windows_text();
     draw_apple_dropdown();
+    draw_context_menu();
 
     // Flip to screen
     flip_buffer();
@@ -853,8 +1373,23 @@ int main(kapi_t *kapi, int argc, char **argv) {
 
         int clicked = (buttons & MOUSE_BTN_LEFT) && !(prev_buttons & MOUSE_BTN_LEFT);
         int released = !(buttons & MOUSE_BTN_LEFT) && (prev_buttons & MOUSE_BTN_LEFT);
+        int right_clicked = (buttons & MOUSE_BTN_RIGHT) && !(prev_buttons & MOUSE_BTN_RIGHT);
 
         int needs_redraw = 0;
+
+        // Handle right-click for context menu
+        if (right_clicked) {
+            // Only show context menu if in files window
+            if (files_window >= 0 && windows[files_window].visible) {
+                window_t *win = &windows[files_window];
+                if (point_in_rect(new_mx, new_my, win->x, win->y + TITLE_HEIGHT, win->w, win->h - TITLE_HEIGHT)) {
+                    context_menu_open = 1;
+                    context_menu_x = new_mx;
+                    context_menu_y = new_my;
+                    needs_redraw = 1;
+                }
+            }
+        }
 
         if (dragging) {
             if (released) {
@@ -871,11 +1406,22 @@ int main(kapi_t *kapi, int argc, char **argv) {
                 needs_redraw = 1;
             }
         } else if (clicked) {
+            // Check if clicking on context menu first
+            if (context_menu_open) {
+                int item = context_menu_hit_test(new_mx, new_my);
+                if (item >= 0) {
+                    context_menu_action(item);
+                }
+                context_menu_open = 0;
+                needs_redraw = 1;
+            }
             // Check if clicking on dock
-            int dock_app = dock_hit_test(new_mx, new_my);
-            if (dock_app >= 0) {
+            else if (dock_hit_test(new_mx, new_my) >= 0) {
+                int dock_app = dock_hit_test(new_mx, new_my);
                 if (dock_app == DOCK_APP_CALC) {
                     open_calculator();
+                } else if (dock_app == DOCK_APP_FILES) {
+                    open_files();
                 }
                 needs_redraw = 1;
             }
@@ -929,6 +1475,10 @@ int main(kapi_t *kapi, int argc, char **argv) {
                         if (win_idx == calc_window) {
                             calc_window = -1;
                         }
+                        // If closing file explorer, reset files_window
+                        if (win_idx == files_window) {
+                            files_window = -1;
+                        }
                         close_window(win_idx);
                         needs_redraw = 1;
                     } else if (point_in_rect(new_mx, new_my, win->x, win->y, win->w, TITLE_HEIGHT)) {
@@ -953,6 +1503,30 @@ int main(kapi_t *kapi, int argc, char **argv) {
                                 needs_redraw = 1;
                             }
                         }
+
+                        // Handle file explorer clicks
+                        if (win_idx == files_window) {
+                            int entry = files_entry_at(win, new_mx, new_my);
+                            if (entry == -2) {
+                                // Clicked ".." - go up
+                                files_navigate("..");
+                                needs_redraw = 1;
+                            } else if (entry >= 0 && entry < files_count) {
+                                // Clicked an entry
+                                if (files_selected == entry) {
+                                    // Double-click (second click on same item)
+                                    if (files_types[entry] == 2) {
+                                        // Navigate into directory
+                                        files_navigate(files_entries[entry]);
+                                    }
+                                    // For files, we could open them later
+                                } else {
+                                    // First click - select
+                                    files_selected = entry;
+                                }
+                                needs_redraw = 1;
+                            }
+                        }
                     }
                 } else {
                     // Clicked on desktop background - close menu if open
@@ -973,9 +1547,48 @@ int main(kapi_t *kapi, int argc, char **argv) {
 
         prev_buttons = buttons;
 
-        // Consume any keypresses (for future use)
+        // Handle keyboard input
         while (api->has_key()) {
-            api->getc();
+            int c = api->getc();
+
+            if (rename_mode) {
+                if (c == '\n' || c == '\r') {
+                    // Enter - commit rename
+                    files_commit_rename();
+                    needs_redraw = 1;
+                } else if (c == 27) {
+                    // Escape - cancel rename
+                    rename_mode = 0;
+                    needs_redraw = 1;
+                } else if (c == '\b' || c == 127) {
+                    // Backspace
+                    if (rename_cursor > 0) {
+                        rename_cursor--;
+                        // Shift characters left
+                        for (int i = rename_cursor; rename_buf[i]; i++) {
+                            rename_buf[i] = rename_buf[i + 1];
+                        }
+                        needs_redraw = 1;
+                    }
+                } else if (c >= 32 && c < 127) {
+                    // Printable character
+                    int len = str_len(rename_buf);
+                    if (len < 60) {
+                        // Shift characters right
+                        for (int i = len + 1; i > rename_cursor; i--) {
+                            rename_buf[i] = rename_buf[i - 1];
+                        }
+                        rename_buf[rename_cursor] = c;
+                        rename_cursor++;
+                        needs_redraw = 1;
+                    }
+                }
+            }
+        }
+
+        // Redraw if needed
+        if (needs_redraw) {
+            redraw_all(new_mx, new_my);
         }
 
         delay(5000);

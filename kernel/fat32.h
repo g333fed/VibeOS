@@ -109,4 +109,10 @@ int fat32_write_file(const char *path, const void *buf, size_t size);
 // Returns 0 on success, -1 on error
 int fat32_delete(const char *path);
 
+// Rename a file or directory (same directory only)
+// oldpath: full path to existing file/dir
+// newname: new filename (just the name, not full path)
+// Returns 0 on success, -1 on error
+int fat32_rename(const char *oldpath, const char *newname);
+
 #endif

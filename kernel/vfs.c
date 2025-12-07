@@ -675,6 +675,152 @@ int vfs_append(vfs_node_t *file, const char *buf, size_t size) {
     return (int)size;
 }
 
+int vfs_delete(const char *path) {
+    if (use_fat32) {
+        // Build full path
+        char fullpath[VFS_MAX_PATH];
+        if (path[0] == '/') {
+            strncpy(fullpath, path, VFS_MAX_PATH - 1);
+            fullpath[VFS_MAX_PATH - 1] = '\0';
+        } else {
+            if (strcmp(cwd_path, "/") == 0) {
+                snprintf(fullpath, VFS_MAX_PATH, "/%s", path);
+            } else {
+                snprintf(fullpath, VFS_MAX_PATH, "%s/%s", cwd_path, path);
+            }
+        }
+
+        return fat32_delete(fullpath);
+    }
+
+    // In-memory delete
+    if (!path || !path[0]) return -1;
+
+    char pathbuf[VFS_MAX_PATH];
+    strncpy(pathbuf, path, VFS_MAX_PATH - 1);
+    pathbuf[VFS_MAX_PATH - 1] = '\0';
+
+    char *last_slash = NULL;
+    for (char *p = pathbuf; *p; p++) {
+        if (*p == '/') last_slash = p;
+    }
+
+    vfs_node_t *parent;
+    char *filename;
+
+    if (last_slash == NULL) {
+        parent = mem_lookup(cwd_path);
+        filename = pathbuf;
+    } else if (last_slash == pathbuf) {
+        parent = mem_root;
+        filename = last_slash + 1;
+    } else {
+        *last_slash = '\0';
+        parent = mem_lookup(pathbuf);
+        filename = last_slash + 1;
+    }
+
+    if (!parent || parent->type != VFS_DIRECTORY) {
+        return -1;
+    }
+
+    // Find the child
+    int found_idx = -1;
+    for (int i = 0; i < parent->child_count; i++) {
+        if (strcmp(parent->children[i]->name, filename) == 0) {
+            found_idx = i;
+            break;
+        }
+    }
+
+    if (found_idx < 0) return -1;
+
+    vfs_node_t *node = parent->children[found_idx];
+
+    // Don't delete directories (for now)
+    if (node->type == VFS_DIRECTORY) {
+        return -1;
+    }
+
+    // Free file data if any
+    if (node->data && node->type == VFS_FILE) {
+        free(node->data);
+    }
+
+    // Remove from parent's children array
+    for (int i = found_idx; i < parent->child_count - 1; i++) {
+        parent->children[i] = parent->children[i + 1];
+    }
+    parent->child_count--;
+
+    return 0;
+}
+
+int vfs_rename(const char *path, const char *newname) {
+    if (use_fat32) {
+        // Build full path
+        char fullpath[VFS_MAX_PATH];
+        if (path[0] == '/') {
+            strncpy(fullpath, path, VFS_MAX_PATH - 1);
+            fullpath[VFS_MAX_PATH - 1] = '\0';
+        } else {
+            if (strcmp(cwd_path, "/") == 0) {
+                snprintf(fullpath, VFS_MAX_PATH, "/%s", path);
+            } else {
+                snprintf(fullpath, VFS_MAX_PATH, "%s/%s", cwd_path, path);
+            }
+        }
+
+        return fat32_rename(fullpath, newname);
+    }
+
+    // In-memory rename
+    if (!path || !path[0] || !newname || !newname[0]) return -1;
+
+    char pathbuf[VFS_MAX_PATH];
+    strncpy(pathbuf, path, VFS_MAX_PATH - 1);
+    pathbuf[VFS_MAX_PATH - 1] = '\0';
+
+    char *last_slash = NULL;
+    for (char *p = pathbuf; *p; p++) {
+        if (*p == '/') last_slash = p;
+    }
+
+    vfs_node_t *parent;
+    char *filename;
+
+    if (last_slash == NULL) {
+        parent = mem_lookup(cwd_path);
+        filename = pathbuf;
+    } else if (last_slash == pathbuf) {
+        parent = mem_root;
+        filename = last_slash + 1;
+    } else {
+        *last_slash = '\0';
+        parent = mem_lookup(pathbuf);
+        filename = last_slash + 1;
+    }
+
+    if (!parent || parent->type != VFS_DIRECTORY) {
+        return -1;
+    }
+
+    // Find the child
+    for (int i = 0; i < parent->child_count; i++) {
+        if (strcmp(parent->children[i]->name, filename) == 0) {
+            // Rename it
+            int j;
+            for (j = 0; newname[j] && j < VFS_MAX_NAME - 1; j++) {
+                parent->children[i]->name[j] = newname[j];
+            }
+            parent->children[i]->name[j] = '\0';
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
 int vfs_is_dir(vfs_node_t *node) {
     return node && node->type == VFS_DIRECTORY;
 }
