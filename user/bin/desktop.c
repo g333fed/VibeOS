@@ -245,11 +245,128 @@ static void draw_folder_icon(int x, int y, int highlighted) {
     }
 }
 
+// ============ Snake Icon (32x32 bitmap) ============
+
+static const uint8_t snake_icon[32][32] = {
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,1,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,1,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,1,2,3,2,2,2,2,2,2,2,3,2,2,1,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,1,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,1,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,1,1,1,2,2,2,2,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,1,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,1,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,1,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,1,1,1,1,1,1,1,1,1,1,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0},
+    {0,0,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0},
+    {0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,2,2,2,1,1,1,1,1,1,1,1,1,1,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+};
+
+// Colors: 0=transparent, 1=black (outline), 2=green (body), 3=white (eyes)
+static void draw_snake_icon(int x, int y, int highlighted) {
+    for (int row = 0; row < 32; row++) {
+        for (int col = 0; col < 32; col++) {
+            uint8_t p = snake_icon[row][col];
+            uint32_t color;
+            switch (p) {
+                case 0: continue; // transparent
+                case 1: color = COLOR_BLACK; break;
+                case 2: color = highlighted ? 0x0040FF40 : 0x0000CC00; break; // green
+                case 3: color = COLOR_WHITE; break; // eyes
+                default: continue;
+            }
+            bb_put_pixel(x + col, y + row, color);
+        }
+    }
+}
+
+// ============ Tetris Icon (32x32 bitmap) ============
+
+static const uint8_t tetris_icon[32][32] = {
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,1,2,2,2,2,1,3,3,3,3,1,4,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,1,2,2,2,2,1,3,3,3,3,1,4,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,1,2,2,2,2,1,3,3,3,3,1,4,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,4,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,4,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0},
+    {0,0,0,0,0,0,0,0,1,5,5,5,5,1,6,6,6,6,1,7,7,7,7,1,7,7,7,1,0,0,0,0},
+    {0,0,0,0,0,0,0,0,1,5,5,5,5,1,6,6,6,6,1,7,7,7,7,1,7,7,7,1,0,0,0,0},
+    {0,0,0,0,0,0,0,0,1,5,5,5,5,1,6,6,6,6,1,7,7,7,7,1,7,7,7,1,0,0,0,0},
+    {0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0},
+    {0,0,0,0,0,0,0,0,1,5,5,5,5,1,6,6,6,6,1,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,1,5,5,5,5,1,6,6,6,6,1,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,1,5,5,5,5,1,6,6,6,6,1,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0},
+    {0,0,0,0,1,2,2,2,2,1,3,3,3,3,1,4,4,4,4,1,4,4,4,4,1,8,8,1,0,0,0,0},
+    {0,0,0,0,1,2,2,2,2,1,3,3,3,3,1,4,4,4,4,1,4,4,4,4,1,8,8,1,0,0,0,0},
+    {0,0,0,0,1,2,2,2,2,1,3,3,3,3,1,4,4,4,4,1,4,4,4,4,1,8,8,1,0,0,0,0},
+    {0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0},
+    {0,0,0,0,1,2,2,2,2,1,3,3,3,3,1,3,3,3,3,1,5,5,5,5,1,8,8,1,0,0,0,0},
+    {0,0,0,0,1,2,2,2,2,1,3,3,3,3,1,3,3,3,3,1,5,5,5,5,1,8,8,1,0,0,0,0},
+    {0,0,0,0,1,2,2,2,2,1,3,3,3,3,1,3,3,3,3,1,5,5,5,5,1,8,8,1,0,0,0,0},
+    {0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+};
+
+// Colors: 0=transparent, 1=black, 2=cyan, 3=yellow, 4=magenta, 5=green, 6=red, 7=blue, 8=orange
+static void draw_tetris_icon(int x, int y, int highlighted) {
+    for (int row = 0; row < 32; row++) {
+        for (int col = 0; col < 32; col++) {
+            uint8_t p = tetris_icon[row][col];
+            uint32_t color;
+            switch (p) {
+                case 0: continue; // transparent
+                case 1: color = COLOR_BLACK; break;
+                case 2: color = highlighted ? 0x0060FFFF : 0x0000FFFF; break; // cyan
+                case 3: color = highlighted ? 0x00FFFF60 : 0x00FFFF00; break; // yellow
+                case 4: color = highlighted ? 0x00FF60FF : 0x00FF00FF; break; // magenta
+                case 5: color = highlighted ? 0x0060FF60 : 0x0000FF00; break; // green
+                case 6: color = highlighted ? 0x00FF6060 : 0x00FF0000; break; // red
+                case 7: color = highlighted ? 0x006060FF : 0x000000FF; break; // blue
+                case 8: color = highlighted ? 0x00FFD060 : 0x00FFA500; break; // orange
+                default: continue;
+            }
+            bb_put_pixel(x + col, y + row, color);
+        }
+    }
+}
+
 // ============ Dock ============
 
 #define DOCK_APP_CALC 0
 #define DOCK_APP_FILES 1
-#define DOCK_APP_COUNT 2
+#define DOCK_APP_SNAKE 2
+#define DOCK_APP_TETRIS 3
+#define DOCK_APP_COUNT 4
 
 static int dock_hover = -1;
 
@@ -268,13 +385,24 @@ static void draw_dock(void) {
     int icon_y = dock_y + 4;
 
     // Draw calculator icon
-    draw_calc_icon(start_x, icon_y, dock_hover == DOCK_APP_CALC);
-    bb_draw_string(start_x, icon_y + DOCK_ICON_SIZE + 2, "Calc", COLOR_BLACK, 0x00C0C0C0);
+    int x = start_x;
+    draw_calc_icon(x, icon_y, dock_hover == DOCK_APP_CALC);
+    bb_draw_string(x, icon_y + DOCK_ICON_SIZE + 2, "Calc", COLOR_BLACK, 0x00C0C0C0);
 
     // Draw files icon
-    int files_x = start_x + DOCK_ICON_SIZE + DOCK_PADDING;
-    draw_folder_icon(files_x, icon_y, dock_hover == DOCK_APP_FILES);
-    bb_draw_string(files_x - 4, icon_y + DOCK_ICON_SIZE + 2, "Files", COLOR_BLACK, 0x00C0C0C0);
+    x += DOCK_ICON_SIZE + DOCK_PADDING;
+    draw_folder_icon(x, icon_y, dock_hover == DOCK_APP_FILES);
+    bb_draw_string(x - 4, icon_y + DOCK_ICON_SIZE + 2, "Files", COLOR_BLACK, 0x00C0C0C0);
+
+    // Draw snake icon
+    x += DOCK_ICON_SIZE + DOCK_PADDING;
+    draw_snake_icon(x, icon_y, dock_hover == DOCK_APP_SNAKE);
+    bb_draw_string(x - 4, icon_y + DOCK_ICON_SIZE + 2, "Snake", COLOR_BLACK, 0x00C0C0C0);
+
+    // Draw tetris icon
+    x += DOCK_ICON_SIZE + DOCK_PADDING;
+    draw_tetris_icon(x, icon_y, dock_hover == DOCK_APP_TETRIS);
+    bb_draw_string(x - 8, icon_y + DOCK_ICON_SIZE + 2, "Tetris", COLOR_BLACK, 0x00C0C0C0);
 }
 
 static int dock_hit_test(int mx, int my) {
@@ -285,15 +413,25 @@ static int dock_hit_test(int mx, int my) {
     int start_x = (screen_width - total_width) / 2;
     int icon_y = dock_y + 4;  // Match draw_dock positioning
 
-    // Check calculator icon
-    if (point_in_rect(mx, my, start_x, icon_y, DOCK_ICON_SIZE, DOCK_ICON_SIZE)) {
+    // Check each icon
+    int x = start_x;
+    if (point_in_rect(mx, my, x, icon_y, DOCK_ICON_SIZE, DOCK_ICON_SIZE)) {
         return DOCK_APP_CALC;
     }
 
-    // Check files icon
-    int files_x = start_x + DOCK_ICON_SIZE + DOCK_PADDING;
-    if (point_in_rect(mx, my, files_x, icon_y, DOCK_ICON_SIZE, DOCK_ICON_SIZE)) {
+    x += DOCK_ICON_SIZE + DOCK_PADDING;
+    if (point_in_rect(mx, my, x, icon_y, DOCK_ICON_SIZE, DOCK_ICON_SIZE)) {
         return DOCK_APP_FILES;
+    }
+
+    x += DOCK_ICON_SIZE + DOCK_PADDING;
+    if (point_in_rect(mx, my, x, icon_y, DOCK_ICON_SIZE, DOCK_ICON_SIZE)) {
+        return DOCK_APP_SNAKE;
+    }
+
+    x += DOCK_ICON_SIZE + DOCK_PADDING;
+    if (point_in_rect(mx, my, x, icon_y, DOCK_ICON_SIZE, DOCK_ICON_SIZE)) {
+        return DOCK_APP_TETRIS;
     }
 
     return -1;
@@ -1422,6 +1560,12 @@ int main(kapi_t *kapi, int argc, char **argv) {
                     open_calculator();
                 } else if (dock_app == DOCK_APP_FILES) {
                     open_files();
+                } else if (dock_app == DOCK_APP_SNAKE) {
+                    // Run snake - blocks until it exits, then we resume
+                    api->exec("/bin/snake");
+                } else if (dock_app == DOCK_APP_TETRIS) {
+                    // Run tetris - blocks until it exits, then we resume
+                    api->exec("/bin/tetris");
                 }
                 needs_redraw = 1;
             }
@@ -1592,6 +1736,9 @@ int main(kapi_t *kapi, int argc, char **argv) {
         }
 
         delay(5000);
+
+        // Yield to other processes (cooperative multitasking)
+        api->yield();
     }
 
     // Cleanup

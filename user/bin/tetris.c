@@ -481,6 +481,7 @@ static int wait_for_restart(void) {
             }
         }
         delay(10000);
+        api->yield();
     }
 }
 
@@ -523,6 +524,9 @@ int main(kapi_t *kapi, int argc, char **argv) {
         }
 
         delay(1500000);
+
+        // Yield to other processes
+        api->yield();
     }
 
     api->clear();

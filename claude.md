@@ -12,7 +12,7 @@ VibeOS is a hobby operating system built from scratch for aarch64 (ARM64), targe
 - **Human**: Vibes only. Yells "fuck yeah" when things work. Cannot provide technical guidance.
 - **Claude**: Full technical lead. Makes all architecture decisions. Wozniak energy.
 
-## Current State (Last Updated: Session 9)
+## Current State (Last Updated: Session 13)
 - [x] Bootloader (boot/boot.S) - Sets up stack, clears BSS, jumps to kernel
 - [x] Minimal kernel (kernel/kernel.c) - UART output working
 - [x] Linker script (linker.ld) - Memory layout for QEMU virt
@@ -27,7 +27,7 @@ VibeOS is a hobby operating system built from scratch for aarch64 (ARM64), targe
 - [x] Virtio keyboard (kernel/keyboard.c) - Full keyboard with shift support
 - [x] Shell (kernel/shell.c) - In-kernel shell with commands
 - [x] VFS (kernel/vfs.c) - Now backed by FAT32, falls back to in-memory
-- [x] Coreutils - ls, cd, pwd, mkdir, touch, cat, echo (with > redirect)
+- [x] Coreutils - ls, cd, pwd, mkdir, touch, rm, cat, echo (with > redirect)
 - [x] ELF loader (kernel/elf.c) - Loads PIE binaries at dynamic addresses
 - [x] Process management (kernel/process.c) - Process table, context switching, scheduler
 - [x] Cooperative multitasking - yield(), spawn() in kapi, round-robin scheduler
@@ -118,12 +118,15 @@ Phase 4: GUI (IN PROGRESS)
 
 ### Build & Run
 ```bash
-make        # Build kernel
-make disk   # Create FAT32 disk image (only needed once)
-make run    # Run with GUI window (serial still in terminal)
+make            # Build kernel AND all user programs (everything)
+make clean      # Clean build artifacts
+make disk       # Create FAT32 disk image (only needed once)
+make run        # Run with GUI window (serial still in terminal)
 make run-nographic  # Terminal only
 make distclean  # Clean everything including disk image
 ```
+
+**IMPORTANT**: `make` builds EVERYTHING - kernel and all user programs. There is no separate user-progs target. Just use `make clean && make` to rebuild.
 
 ### Mounting the Disk Image (macOS)
 ```bash
@@ -145,6 +148,7 @@ hdiutil detach /Volumes/VIBEOS # Unmount before running QEMU
 | cd <path> | Change directory |
 | mkdir <dir> | Create directory |
 | touch <file> | Create empty file |
+| rm <file> | Remove file |
 | cat <file> | Show file contents |
 | vi <file> | Edit file (modal editor) |
 
@@ -320,7 +324,37 @@ hdiutil detach /Volumes/VIBEOS # Unmount before running QEMU
 - Improved menu bar layout and spacing
 - Windows can't be dragged below the dock
 
-**NEXT SESSION TODO (Phase 1 Desktop Apps):**
+### Session 12
+- Built File Explorer app:
+  - Folder icon in dock
+  - Navigate directories (click to select, double-click to enter)
+  - Path bar showing current location
+  - ".." to go up a directory
+  - Right-click context menu with: New File, New Folder, Rename, Delete
+  - Inline rename with keyboard input (Enter to confirm, Escape to cancel)
+- Added rm command to shell
+- Added vfs_delete() and vfs_rename() to VFS layer
+- Added fat32_rename() - modifies directory entry name in place
+- Extended kapi with delete, rename, readdir, set_cwd, get_cwd
+- Fixed macOS junk files (._, .DS_Store, .fseventsd) in Makefile:
+  - Disk mounts with -nobrowse to prevent Finder indexing
+  - Cleanup commands run after every mount/install
+
+### Session 13
+- Added snake and tetris game launchers to dock:
+  - Snake icon (32x32 pixel art green snake)
+  - Tetris icon (32x32 colorful blocks)
+  - Click to launch games from desktop
+- Fixed cooperative multitasking to actually work:
+  - Added yield() calls to desktop, snake, and tetris main loops
+  - Fixed process_yield() to work from kernel context (was returning early)
+  - Made process_exec() create real process entries (was direct function call)
+  - Added kernel_context to save/restore when switching between kernel and processes
+- Games now use exec() instead of spawn():
+  - Desktop blocks while game runs, resumes when game exits
+  - Clean handoff - no screen fighting between processes
+- **Achievement**: Can launch games from dock and return to desktop!
+
+**NEXT SESSION TODO:**
 - Build notepad app (text editing in window)
-- Build file explorer app (navigate filesystem)
 - Build terminal emulator (shell in window - biggest unlock)

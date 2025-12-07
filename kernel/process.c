@@ -20,6 +20,10 @@ static process_t proc_table[MAX_PROCESSES];
 static int current_pid = -1;  // -1 means kernel/shell is running
 static int next_pid = 1;
 
+// Kernel context - saved when switching from kernel to a process
+// This allows us to return to kernel (e.g., desktop running via process_exec)
+static cpu_context_t kernel_context;
+
 // Program load address - grows upward as we load programs
 // Start after kernel heap has some room
 #define PROGRAM_BASE 0x41000000  // 16MB into RAM
@@ -255,11 +259,13 @@ void process_exit(int status) {
 
 // Yield - voluntarily give up CPU
 void process_yield(void) {
-    if (current_pid < 0) return;  // Kernel can't yield
-
-    process_t *proc = &proc_table[current_pid];
-    proc->state = PROC_STATE_READY;
-
+    if (current_pid >= 0) {
+        // Mark current process as ready
+        process_t *proc = &proc_table[current_pid];
+        proc->state = PROC_STATE_READY;
+    }
+    // Always try to schedule - even from kernel context
+    // This lets programs started via process_exec() yield to spawned children
     process_schedule();
 }
 
@@ -286,8 +292,12 @@ void process_schedule(void) {
             // Current process still running, keep it
             return;
         }
-        // Return to kernel
-        current_pid = -1;
+        // Return to kernel (if we were in a process, switch back to kernel)
+        if (old_pid >= 0) {
+            current_pid = -1;
+            context_switch(&old_proc->context, &kernel_context);
+        }
+        // Already in kernel, just return
         return;
     }
 
@@ -307,66 +317,45 @@ void process_schedule(void) {
     current_pid = next;
 
     // Context switch!
-    cpu_context_t *old_ctx = old_proc ? &old_proc->context : NULL;
+    // If old_pid == -1, we're switching FROM kernel context
+    cpu_context_t *old_ctx = (old_pid >= 0) ? &old_proc->context : &kernel_context;
     context_switch(old_ctx, &new_proc->context);
 }
 
-// Execute and wait - the simple single-process mode (for compatibility)
+// Execute and wait - creates a real process and waits for it to finish
 int process_exec_args(const char *path, int argc, char **argv) {
-    // Look up file
-    vfs_node_t *file = vfs_lookup(path);
-    if (!file) {
-        printf("[PROC] exec: '%s' not found\n", path);
+    // Create the process
+    int pid = process_create(path, argc, argv);
+    if (pid < 0) {
+        return pid;  // Error already printed
+    }
+
+    // Start it
+    process_start(pid);
+
+    // Find the slot for this process
+    int slot = -1;
+    for (int i = 0; i < MAX_PROCESSES; i++) {
+        if (proc_table[i].pid == pid) {
+            slot = i;
+            break;
+        }
+    }
+
+    if (slot < 0) {
+        printf("[PROC] exec: process disappeared?\n");
         return -1;
     }
 
-    if (vfs_is_dir(file)) {
-        printf("[PROC] exec: '%s' is a directory\n", path);
-        return -2;
+    // Wait for it to finish by yielding until it's done
+    // The process is READY, we need to run the scheduler to let it execute
+    while (proc_table[slot].state != PROC_STATE_FREE &&
+           proc_table[slot].state != PROC_STATE_ZOMBIE) {
+        process_schedule();
     }
 
-    size_t size = file->size;
-    if (size == 0) {
-        printf("[PROC] exec: '%s' is empty\n", path);
-        return -3;
-    }
-
-    char *data = malloc(size);
-    if (!data) {
-        printf("[PROC] exec: out of memory\n");
-        return -4;
-    }
-
-    int bytes = vfs_read(file, data, size, 0);
-    if (bytes != (int)size) {
-        printf("[PROC] exec: failed to read file\n");
-        free(data);
-        return -5;
-    }
-
-    // Calculate load address
-    uint64_t load_addr = ALIGN_64K(next_load_addr);
-
-    // Load ELF
-    elf_load_info_t info;
-    if (elf_load_at(data, size, load_addr, &info) != 0) {
-        printf("[PROC] exec: failed to load ELF\n");
-        free(data);
-        return -6;
-    }
-
-    free(data);
-
-    // Update next load address
-    next_load_addr = ALIGN_64K(load_addr + info.load_size + 0x10000);
-
-    printf("[PROC] Starting '%s' at 0x%lx\n", path, info.entry);
-
-    // Call directly (single-process mode)
-    program_entry_t prog_main = (program_entry_t)info.entry;
-    int result = prog_main(&kapi, argc, argv);
-
-    printf("[PROC] Process '%s' returned %d\n", path, result);
+    int result = proc_table[slot].exit_status;
+    printf("[PROC] Process '%s' (pid %d) finished with status %d\n", path, pid, result);
     return result;
 }
 
