@@ -21,6 +21,13 @@ typedef struct kapi {
     void (*puts)(const char *s);
     int  (*getc)(void);
     void (*set_color)(uint32_t fg, uint32_t bg);
+    void (*clear)(void);
+    void (*set_cursor)(int row, int col);
+    void (*print_int)(int n);
+    void (*print_hex)(uint32_t n);
+
+    // Keyboard
+    int  (*has_key)(void);
 
     // Memory
     void *(*malloc)(size_t size);

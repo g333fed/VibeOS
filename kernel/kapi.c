@@ -17,6 +17,35 @@ static void kapi_exit(int status) {
     process_exit(status);
 }
 
+// Print integer (simple implementation)
+static void kapi_print_int(int n) {
+    if (n < 0) {
+        console_putc('-');
+        n = -n;
+    }
+    if (n == 0) {
+        console_putc('0');
+        return;
+    }
+    char buf[12];
+    int i = 0;
+    while (n > 0) {
+        buf[i++] = '0' + (n % 10);
+        n /= 10;
+    }
+    while (i > 0) {
+        console_putc(buf[--i]);
+    }
+}
+
+// Print hex
+static void kapi_print_hex(uint32_t n) {
+    const char *hex = "0123456789ABCDEF";
+    for (int i = 7; i >= 0; i--) {
+        console_putc(hex[(n >> (i * 4)) & 0xF]);
+    }
+}
+
 // Wrapper for exec
 static int kapi_exec(const char *path) {
     return process_exec(path);
@@ -65,6 +94,13 @@ void kapi_init(void) {
     kapi.puts = console_puts;
     kapi.getc = keyboard_getc;
     kapi.set_color = kapi_set_color;
+    kapi.clear = console_clear;
+    kapi.set_cursor = console_set_cursor;
+    kapi.print_int = kapi_print_int;
+    kapi.print_hex = kapi_print_hex;
+
+    // Keyboard
+    kapi.has_key = keyboard_has_key;
 
     // Memory
     kapi.malloc = malloc;

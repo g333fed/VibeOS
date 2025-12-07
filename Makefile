@@ -23,8 +23,8 @@ BOOT_SRC = $(BOOT_DIR)/boot.S
 KERNEL_C_SRCS = $(wildcard $(KERNEL_DIR)/*.c)
 KERNEL_S_SRCS = $(wildcard $(KERNEL_DIR)/*.S)
 
-# Userspace programs (disabled - monolith kernel)
-USER_PROGS =
+# Userspace programs to build and install to disk
+USER_PROGS = snake tetris
 
 # Object files
 BOOT_OBJ = $(BUILD_DIR)/boot.o
@@ -32,9 +32,8 @@ KERNEL_C_OBJS = $(patsubst $(KERNEL_DIR)/%.c,$(BUILD_DIR)/%.o,$(KERNEL_C_SRCS))
 KERNEL_S_OBJS = $(patsubst $(KERNEL_DIR)/%.S,$(BUILD_DIR)/%.o,$(KERNEL_S_SRCS))
 KERNEL_OBJS = $(KERNEL_C_OBJS) $(KERNEL_S_OBJS)
 
-# Embedded binary objects (userspace programs linked into kernel)
+# Userspace ELF files (installed to disk, NOT embedded in kernel)
 USER_ELFS = $(patsubst %,$(USER_BUILD_DIR)/%.elf,$(USER_PROGS))
-USER_OBJS = $(patsubst %,$(USER_BUILD_DIR)/%.o,$(USER_PROGS))
 
 # Output files
 KERNEL_ELF = $(BUILD_DIR)/vibeos.elf
@@ -59,7 +58,7 @@ QEMU_FLAGS = -M virt -cpu cortex-a72 -m 256M -global virtio-mmio.force-legacy=fa
 # No-graphics mode (terminal only) - no keyboard in nographic mode
 QEMU_FLAGS_NOGRAPHIC = -M virt -cpu cortex-a72 -m 256M -global virtio-mmio.force-legacy=false -device virtio-blk-device,drive=hd0 -drive file=$(DISK_IMG),if=none,format=raw,id=hd0 -nographic -kernel $(KERNEL_BIN)
 
-.PHONY: all clean run run-nographic debug user disk
+.PHONY: all clean run run-nographic debug user disk install-user
 
 all: $(KERNEL_BIN)
 
@@ -98,16 +97,22 @@ $(USER_BUILD_DIR)/%.elf: $(USER_BUILD_DIR)/crt0.o $(USER_BUILD_DIR)/%.prog.o
 	$(LD) $(USER_LDFLAGS) $^ -o $@
 	@echo "Built userspace program: $@"
 
-# Convert userspace ELF to linkable object (embedded binary)
-$(USER_BUILD_DIR)/%.o: $(USER_BUILD_DIR)/%.elf
-	$(OBJCOPY) -I binary -O elf64-littleaarch64 -B aarch64 $< $@
-	@echo "Embedded binary: $@"
-
 # Build all userspace programs
 user: $(USER_ELFS)
 
-# Link kernel with embedded userspace programs
-$(KERNEL_ELF): $(BOOT_OBJ) $(KERNEL_OBJS) $(USER_OBJS)
+# Install userspace programs to disk image
+install-user: user $(DISK_IMG)
+	@echo "Installing userspace programs to disk..."
+	@hdiutil attach $(DISK_IMG) > /dev/null
+	@for prog in $(USER_PROGS); do \
+		cp $(USER_BUILD_DIR)/$$prog.elf /Volumes/VIBEOS/bin/$$prog; \
+		echo "  Installed /bin/$$prog"; \
+	done
+	@hdiutil detach /Volumes/VIBEOS > /dev/null
+	@echo "Done!"
+
+# Link kernel (no embedded userspace - programs are on disk)
+$(KERNEL_ELF): $(BOOT_OBJ) $(KERNEL_OBJS)
 	$(LD) $(LDFLAGS) $^ -o $@
 
 $(KERNEL_BIN): $(KERNEL_ELF)
@@ -148,7 +153,7 @@ $(DISK_IMG):
 	@echo "    hdiutil detach /Volumes/VIBEOS"
 	@echo "========================================="
 
-run: $(KERNEL_BIN) $(DISK_IMG)
+run: $(KERNEL_BIN) install-user
 	$(QEMU) $(QEMU_FLAGS)
 
 run-nographic: $(KERNEL_BIN) $(DISK_IMG)

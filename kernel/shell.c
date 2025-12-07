@@ -13,8 +13,6 @@
 #include "vfs.h"
 #include "process.h"
 #include "vi.h"
-#include "snake.h"
-#include "tetris.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -116,7 +114,7 @@ static void cmd_help(void) {
     console_puts("            - Show memory info\n");
 
     console_set_color(COLOR_AMBER, COLOR_BLACK);
-    console_puts(" Games:\n");
+    console_puts(" Programs (in /bin):\n");
     console_set_color(COLOR_WHITE, COLOR_BLACK);
 
     console_puts("  ");
@@ -130,6 +128,8 @@ static void cmd_help(void) {
     console_puts("tetris");
     console_set_color(COLOR_WHITE, COLOR_BLACK);
     console_puts("         - Play Tetris!\n");
+
+    console_puts("\nRun any program with its name or path.\n");
 }
 
 static void cmd_clear(void) {
@@ -331,16 +331,6 @@ static void cmd_vi(int argc, char *argv[]) {
     vi_edit(argv[1]);
 }
 
-static void cmd_snake(void) {
-    int score = snake_run();
-    printf("Final score: %d\n", score);
-}
-
-static void cmd_tetris(void) {
-    int score = tetris_run();
-    printf("Final score: %d\n", score);
-}
-
 // ============ Shell Core ============
 
 // Parse command line into argc/argv
@@ -468,10 +458,6 @@ static void execute_command(char *cmd) {
         cmd_cat(argc, argv);
     } else if (str_eq(argv[0], "vi")) {
         cmd_vi(argc, argv);
-    } else if (str_eq(argv[0], "snake")) {
-        cmd_snake();
-    } else if (str_eq(argv[0], "tetris")) {
-        cmd_tetris();
     } else {
         // Try to execute as a program
         // First check if it's a path

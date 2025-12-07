@@ -24,6 +24,13 @@ typedef struct {
     void (*puts)(const char *s);
     int  (*getc)(void);              // Non-blocking, returns -1 if no input
     void (*set_color)(uint32_t fg, uint32_t bg);
+    void (*clear)(void);             // Clear screen
+    void (*set_cursor)(int row, int col);  // Set cursor position
+    void (*print_int)(int n);        // Print integer
+    void (*print_hex)(uint32_t n);   // Print hex
+
+    // Keyboard
+    int  (*has_key)(void);           // Check if key available
 
     // Memory
     void *(*malloc)(size_t size);
