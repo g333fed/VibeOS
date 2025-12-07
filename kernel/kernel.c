@@ -8,6 +8,7 @@
 #include "memory.h"
 #include "string.h"
 #include "printf.h"
+#include "fb.h"
 
 // QEMU virt machine PL011 UART base address
 #define UART0_BASE 0x09000000
@@ -65,17 +66,29 @@ void kernel_main(void) {
     strcpy(test1, "Hi from printf!");
     printf("       Wrote to memory: %s\n", test1);
 
-    // Test sprintf
-    char buf[64];
-    sprintf(buf, "sprintf works! 42 in hex is 0x%x", 42);
-    printf("       %s\n", buf);
-
     // Free and check
     free(test1);
     free(test2);
     printf("       Freed allocations. Free: %lu MB\n", memory_free() / 1024 / 1024);
 
     printf("[BOOT] Running on QEMU virt machine.\n");
+
+    // Initialize framebuffer
+    if (fb_init() == 0) {
+        // Clear to black
+        fb_clear(COLOR_BLACK);
+
+        // Draw "VibeOS" title
+        fb_draw_string(20, 20, "VibeOS v0.1", COLOR_WHITE, COLOR_BLACK);
+        fb_draw_string(20, 40, "================================", COLOR_WHITE, COLOR_BLACK);
+        fb_draw_string(20, 60, "The vibes are immaculate.", COLOR_GREEN, COLOR_BLACK);
+        fb_draw_string(20, 100, "Framebuffer: 800x600", COLOR_WHITE, COLOR_BLACK);
+        fb_draw_string(20, 120, "Font: 8x16 bitmap", COLOR_WHITE, COLOR_BLACK);
+        fb_draw_string(20, 160, "Ready for more awesome stuff!", COLOR_AMBER, COLOR_BLACK);
+
+        printf("[FB] Text drawn on screen!\n");
+    }
+
     printf("\n");
     printf("Welcome to VibeOS! The vibes are immaculate.\n");
     printf("\n");
