@@ -36,7 +36,8 @@ LDFLAGS = -nostdlib -T linker.ld
 # QEMU settings
 QEMU = qemu-system-aarch64
 # Graphical mode with virtio-keyboard
-QEMU_FLAGS = -M virt -cpu cortex-a72 -m 256M -device ramfb -device virtio-keyboard-device -serial stdio -kernel $(KERNEL_BIN)
+# Use force-legacy=false to get modern virtio (version 2) which is easier to program
+QEMU_FLAGS = -M virt -cpu cortex-a72 -m 256M -global virtio-mmio.force-legacy=false -device ramfb -device virtio-keyboard-device -serial stdio -kernel $(KERNEL_BIN)
 # No-graphics mode (terminal only)
 QEMU_FLAGS_NOGRAPHIC = -M virt -cpu cortex-a72 -m 256M -nographic -kernel $(KERNEL_BIN)
 

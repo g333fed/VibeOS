@@ -23,11 +23,14 @@
 #define VIRTIO_MMIO_QUEUE_SEL       0x030
 #define VIRTIO_MMIO_QUEUE_NUM_MAX   0x034
 #define VIRTIO_MMIO_QUEUE_NUM       0x038
-#define VIRTIO_MMIO_QUEUE_READY     0x044
+#define VIRTIO_MMIO_QUEUE_ALIGN     0x03c   // Legacy only
+#define VIRTIO_MMIO_QUEUE_PFN       0x040   // Legacy only - page frame number
+#define VIRTIO_MMIO_QUEUE_READY     0x044   // Modern only
 #define VIRTIO_MMIO_QUEUE_NOTIFY    0x050
 #define VIRTIO_MMIO_INTERRUPT_STATUS 0x060
 #define VIRTIO_MMIO_INTERRUPT_ACK   0x064
 #define VIRTIO_MMIO_STATUS          0x070
+// Modern only registers (version 2):
 #define VIRTIO_MMIO_QUEUE_DESC_LOW  0x080
 #define VIRTIO_MMIO_QUEUE_DESC_HIGH 0x084
 #define VIRTIO_MMIO_QUEUE_AVAIL_LOW 0x090
@@ -100,7 +103,12 @@ static char key_buffer[KEY_BUF_SIZE];
 static int key_buf_read = 0;
 static int key_buf_write = 0;
 
-// Queue memory (must be at global scope for proper static allocation)
+// Legacy virtio queue layout requires specific alignment and contiguous layout
+// For queue size N:
+//   Descriptor table: N * 16 bytes, 16-byte aligned
+//   Available ring: 6 + 2*N bytes, 2-byte aligned
+//   Used ring: 6 + 8*N bytes, 4-byte aligned (starts at page boundary for legacy)
+// We use 4KB page for simplicity with queue size 16
 static uint8_t queue_mem[4096] __attribute__((aligned(4096)));
 static virtio_input_event_t event_bufs[QUEUE_SIZE] __attribute__((aligned(16)));
 
@@ -116,26 +124,106 @@ static const char scancode_to_ascii[128] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
 
+// Memory barriers for device communication
+static inline void mb(void) {
+    asm volatile("dsb sy" ::: "memory");
+}
+
 static inline uint32_t read32(volatile uint32_t *addr) {
-    return *addr;
+    uint32_t val = *addr;
+    mb();
+    return val;
 }
 
 static inline void write32(volatile uint32_t *addr, uint32_t val) {
+    mb();
     *addr = val;
+    mb();
 }
 
+// Virtio-input config registers (offset from base + 0x100)
+#define VIRTIO_INPUT_CFG_SELECT  0x100
+#define VIRTIO_INPUT_CFG_SUBSEL  0x101
+#define VIRTIO_INPUT_CFG_SIZE    0x102
+#define VIRTIO_INPUT_CFG_DATA    0x108
+
+// Config select values
+#define VIRTIO_INPUT_CFG_ID_NAME    0x01
+#define VIRTIO_INPUT_CFG_ID_DEVIDS  0x03
+
 static volatile uint32_t *find_virtio_input(void) {
+    printf("[KBD] Scanning virtio devices...\n");
+
     // Scan virtio MMIO devices
     for (int i = 0; i < 32; i++) {
         volatile uint32_t *base = (volatile uint32_t *)(VIRTIO_MMIO_BASE + i * VIRTIO_MMIO_STRIDE);
+        volatile uint8_t *base8 = (volatile uint8_t *)(VIRTIO_MMIO_BASE + i * VIRTIO_MMIO_STRIDE);
+
+        uint32_t magic = read32(base + VIRTIO_MMIO_MAGIC/4);
+        uint32_t device_id = read32(base + VIRTIO_MMIO_DEVICE_ID/4);
+
+        if (magic == 0x74726976 && device_id != 0) {
+            printf("[KBD]   Device %d: type=%d", i, device_id);
+
+            if (device_id == VIRTIO_DEV_INPUT) {
+                // Query the input device name
+                base8[VIRTIO_INPUT_CFG_SELECT] = VIRTIO_INPUT_CFG_ID_NAME;
+                base8[VIRTIO_INPUT_CFG_SUBSEL] = 0;
+                mb();
+
+                uint8_t size = base8[VIRTIO_INPUT_CFG_SIZE];
+                if (size > 0 && size < 64) {
+                    printf(" name=\"");
+                    for (int j = 0; j < size && j < 32; j++) {
+                        char c = base8[VIRTIO_INPUT_CFG_DATA + j];
+                        if (c >= 32 && c < 127) printf("%c", c);
+                    }
+                    printf("\"");
+                }
+            }
+            printf("\n");
+        }
+    }
+
+    // Now find the keyboard specifically
+    for (int i = 0; i < 32; i++) {
+        volatile uint32_t *base = (volatile uint32_t *)(VIRTIO_MMIO_BASE + i * VIRTIO_MMIO_STRIDE);
+        volatile uint8_t *base8 = (volatile uint8_t *)(VIRTIO_MMIO_BASE + i * VIRTIO_MMIO_STRIDE);
 
         uint32_t magic = read32(base + VIRTIO_MMIO_MAGIC/4);
         uint32_t device_id = read32(base + VIRTIO_MMIO_DEVICE_ID/4);
 
         if (magic == 0x74726976 && device_id == VIRTIO_DEV_INPUT) {
+            // Check if this is a keyboard by looking at the name
+            base8[VIRTIO_INPUT_CFG_SELECT] = VIRTIO_INPUT_CFG_ID_NAME;
+            base8[VIRTIO_INPUT_CFG_SUBSEL] = 0;
+            mb();
+
+            // Check first few chars for "keyboard" or "QEMU"
+            char name[16] = {0};
+            uint8_t size = base8[VIRTIO_INPUT_CFG_SIZE];
+            for (int j = 0; j < 15 && j < size; j++) {
+                name[j] = base8[VIRTIO_INPUT_CFG_DATA + j];
+            }
+
+            // Accept any virtio-input for now, but prefer keyboard
+            if (name[0] == 'Q' || name[0] == 'k' || name[0] == 'K') {
+                printf("[KBD] Selected: %s\n", name);
+                return base;
+            }
+        }
+    }
+
+    // Fallback: return first virtio-input device
+    for (int i = 0; i < 32; i++) {
+        volatile uint32_t *base = (volatile uint32_t *)(VIRTIO_MMIO_BASE + i * VIRTIO_MMIO_STRIDE);
+        uint32_t magic = read32(base + VIRTIO_MMIO_MAGIC/4);
+        uint32_t device_id = read32(base + VIRTIO_MMIO_DEVICE_ID/4);
+        if (magic == 0x74726976 && device_id == VIRTIO_DEV_INPUT) {
             return base;
         }
     }
+
     return NULL;
 }
 
@@ -150,8 +238,18 @@ int keyboard_init(void) {
 
     printf("[KBD] Found virtio-input at %p\n", kbd_base);
 
+    // Check virtio version
+    uint32_t version = read32(kbd_base + VIRTIO_MMIO_VERSION/4);
+    printf("[KBD] Virtio version: %d\n", version);
+
     // Reset device
     write32(kbd_base + VIRTIO_MMIO_STATUS/4, 0);
+
+    // Wait for reset
+    while (read32(kbd_base + VIRTIO_MMIO_STATUS/4) != 0) {
+        asm volatile("nop");
+    }
+    printf("[KBD] Device reset complete\n");
 
     // Acknowledge
     write32(kbd_base + VIRTIO_MMIO_STATUS/4, VIRTIO_STATUS_ACK);
@@ -162,7 +260,7 @@ int keyboard_init(void) {
     // Read and write features (we don't need any special features)
     write32(kbd_base + VIRTIO_MMIO_DRIVER_FEATURES/4, 0);
 
-    // Features OK
+    // Features OK (modern virtio v2)
     write32(kbd_base + VIRTIO_MMIO_STATUS/4,
             VIRTIO_STATUS_ACK | VIRTIO_STATUS_DRIVER | VIRTIO_STATUS_FEATURES_OK);
 
@@ -181,20 +279,29 @@ int keyboard_init(void) {
     write32(kbd_base + VIRTIO_MMIO_QUEUE_NUM/4, QUEUE_SIZE);
     printf("[KBD] Set queue size to %d\n", QUEUE_SIZE);
 
-    // Use globally allocated queue memory
+    // Legacy virtio queue layout (contiguous in memory):
+    // Offset 0: Descriptor table (N * 16 bytes)
+    // Offset 256 (16*16): Available ring (6 + 2*N bytes)
+    // Offset 512 (aligned): Padding
+    // Offset 2048 (page aligned): Used ring (6 + 8*N bytes)
     printf("[KBD] Using queue memory at %p\n", queue_mem);
 
     desc = (virtq_desc_t *)queue_mem;
+    // Available ring right after descriptors
     avail = (virtq_avail_t *)(queue_mem + QUEUE_SIZE * sizeof(virtq_desc_t));
-    used = (virtq_used_t *)(queue_mem + 2048);  // Put used ring in second half
+    // Used ring at offset that maintains alignment (legacy uses QUEUE_ALIGN)
+    // For legacy MMIO, used ring should be at next page-aligned offset
+    // With QUEUE_SIZE=16: desc=256 bytes, avail=6+32=38 bytes
+    // Used ring starts at aligned offset (typically align to QUEUE_ALIGN which is usually 4096)
+    used = (virtq_used_t *)(queue_mem + 2048);
     events = event_bufs;
     printf("[KBD] desc=%p avail=%p used=%p events=%p\n", desc, avail, used, events);
 
-    // Set queue addresses
+    // For MODERN mode (version 2), use separate address registers
     uint64_t desc_addr = (uint64_t)desc;
     uint64_t avail_addr = (uint64_t)avail;
     uint64_t used_addr = (uint64_t)used;
-    printf("[KBD] Setting queue addresses...\n");
+    printf("[KBD] Setting queue addresses (modern mode)...\n");
 
     write32(kbd_base + VIRTIO_MMIO_QUEUE_DESC_LOW/4, (uint32_t)desc_addr);
     write32(kbd_base + VIRTIO_MMIO_QUEUE_DESC_HIGH/4, (uint32_t)(desc_addr >> 32));
@@ -215,25 +322,41 @@ int keyboard_init(void) {
     printf("[KBD] Descriptors initialized\n");
 
     // Add all descriptors to available ring
+    printf("[KBD] Setting avail->flags...\n");
     avail->flags = 0;
+    printf("[KBD] avail->flags = 0 done\n");
+
+    printf("[KBD] Filling available ring...\n");
     for (int i = 0; i < QUEUE_SIZE; i++) {
         avail->ring[i] = i;
+        printf("[KBD]   ring[%d] = %d\n", i, i);
     }
+    printf("[KBD] Ring filled\n");
+
     avail->idx = QUEUE_SIZE;
     printf("[KBD] Available ring set up\n");
 
+    // Queue ready (modern virtio v2)
     printf("[KBD] Setting queue ready...\n");
-    // Queue ready
     write32(kbd_base + VIRTIO_MMIO_QUEUE_READY/4, 1);
 
     printf("[KBD] Setting driver OK...\n");
-    // Driver OK
+    // Driver OK (modern mode - includes FEATURES_OK)
     write32(kbd_base + VIRTIO_MMIO_STATUS/4,
             VIRTIO_STATUS_ACK | VIRTIO_STATUS_DRIVER | VIRTIO_STATUS_FEATURES_OK | VIRTIO_STATUS_DRIVER_OK);
 
     printf("[KBD] Notifying device...\n");
     // Notify device
     write32(kbd_base + VIRTIO_MMIO_QUEUE_NOTIFY/4, 0);
+
+    // Check final status
+    uint32_t status = read32(kbd_base + VIRTIO_MMIO_STATUS/4);
+    printf("[KBD] Final status: 0x%x\n", status);
+
+    if (status & 0x40) {
+        printf("[KBD] ERROR: Device reported failure!\n");
+        return -1;
+    }
 
     printf("[KBD] Keyboard initialized!\n");
     return 0;

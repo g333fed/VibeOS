@@ -96,12 +96,15 @@ make run-nographic  # Terminal only
 ## Gotchas / Lessons Learned
 - **aarch64 va_list**: Can't pass va_list to helper functions easily. Inline the va_arg handling.
 - **QEMU virt machine**: Uses PL011 UART at 0x09000000, GIC at 0x08000000
+- **Virtio legacy vs modern**: QEMU defaults to legacy virtio (version 1). Use `-global virtio-mmio.force-legacy=false` to get modern virtio (version 2) which is much easier to program.
+- **Virtio memory barriers**: ARM needs `dsb sy` barriers around device register access.
 
 ## Current Status
 - Console works: prints to QEMU window with colors
-- Input works via UART: type in terminal, shows on screen
-- Virtio-keyboard: WIP, hangs during init (needs debugging in next session)
-- NEXT: Build shell (command parsing), then coreutils
+- Virtio keyboard works! Type in QEMU window, shows on screen
+- UART fallback also works (type in terminal)
+- Shell works! Commands: help, clear, echo, version, mem
+- NEXT: Filesystem, then move shell to userspace
 
 ## Session Log
 ### Session 1

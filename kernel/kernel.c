@@ -11,6 +11,7 @@
 #include "fb.h"
 #include "console.h"
 #include "keyboard.h"
+#include "shell.h"
 
 // QEMU virt machine PL011 UART base address
 #define UART0_BASE 0x09000000
@@ -121,27 +122,17 @@ void kernel_main(void) {
         console_puts("\n");
     }
 
-    // TODO: virtio-keyboard needs more work, use UART for now
-    // keyboard_init();
+    // Try virtio-keyboard (debugging)
+    keyboard_init();
 
     printf("\n");
-    printf("[KERNEL] Ready. Type in terminal window.\n");
+    printf("[KERNEL] Starting shell...\n");
 
-    // Input loop - use UART (type in terminal, shows on screen)
-    console_set_color(COLOR_WHITE, COLOR_BLACK);
-    console_puts("> ");
+    // Run the shell
+    shell_run();
 
+    // Should never reach here
     while (1) {
-        int c = uart_getc();
-        if (c >= 0) {
-            if (c == '\r' || c == '\n') {
-                console_putc('\n');
-                console_puts("> ");
-            } else if (c == 127 || c == '\b') {
-                console_putc('\b');
-            } else {
-                console_putc((char)c);
-            }
-        }
+        asm volatile("wfi");
     }
 }

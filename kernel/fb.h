@@ -21,11 +21,14 @@ void fb_put_pixel(uint32_t x, uint32_t y, uint32_t color);
 void fb_fill_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color);
 void fb_clear(uint32_t color);
 
-// Colors (32-bit ARGB)
+// Colors (32-bit XRGB)
 #define COLOR_BLACK   0x00000000
 #define COLOR_WHITE   0x00FFFFFF
 #define COLOR_GREEN   0x0000FF00
 #define COLOR_AMBER   0x00FFBF00
+#define COLOR_RED     0x00FF0000
+#define COLOR_BLUE    0x000000FF
+#define COLOR_CYAN    0x0000FFFF
 
 // Text drawing
 void fb_draw_char(uint32_t x, uint32_t y, char c, uint32_t fg, uint32_t bg);
