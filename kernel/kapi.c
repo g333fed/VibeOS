@@ -143,6 +143,10 @@ void kapi_init(void) {
     kapi.fb_draw_char = fb_draw_char;
     kapi.fb_draw_string = fb_draw_string;
 
+    // Font access
+    extern const uint8_t font_data[256][16];
+    kapi.font_data = (const uint8_t *)font_data;
+
     // Mouse
     kapi.mouse_get_pos = mouse_get_screen_pos;
     kapi.mouse_get_buttons = mouse_get_buttons;

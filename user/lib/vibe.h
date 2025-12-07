@@ -57,6 +57,9 @@ typedef struct kapi {
     void (*fb_draw_char)(uint32_t x, uint32_t y, char c, uint32_t fg, uint32_t bg);
     void (*fb_draw_string)(uint32_t x, uint32_t y, const char *s, uint32_t fg, uint32_t bg);
 
+    // Font access (for custom rendering)
+    const uint8_t *font_data;        // 256 chars, 16 bytes each (8x16 bitmap)
+
     // Mouse (for GUI programs)
     void (*mouse_get_pos)(int *x, int *y);
     uint8_t (*mouse_get_buttons)(void);

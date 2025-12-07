@@ -40,6 +40,16 @@ static int drag_offset_y = 0;
 // Previous mouse state
 static uint8_t prev_buttons = 0;
 
+// Menu state
+static int apple_menu_open = 0;
+static int should_quit = 0;
+
+// Apple menu dimensions
+#define APPLE_MENU_X 4
+#define APPLE_MENU_W 20
+#define DROPDOWN_W 160
+#define DROPDOWN_ITEM_H 18
+
 // Double buffering
 static uint32_t *backbuffer = 0;
 static uint32_t screen_width, screen_height;
@@ -85,6 +95,30 @@ static void flip_buffer(void) {
     }
 }
 
+// ============ Backbuffer Text Drawing ============
+
+#define FONT_WIDTH 8
+#define FONT_HEIGHT 16
+
+static void bb_draw_char(int x, int y, char c, uint32_t fg, uint32_t bg) {
+    const uint8_t *glyph = api->font_data + (unsigned char)c * 16;
+    for (int row = 0; row < FONT_HEIGHT; row++) {
+        uint8_t bits = glyph[row];
+        for (int col = 0; col < FONT_WIDTH; col++) {
+            uint32_t color = (bits & (0x80 >> col)) ? fg : bg;
+            bb_put_pixel(x + col, y + row, color);
+        }
+    }
+}
+
+static void bb_draw_string(int x, int y, const char *s, uint32_t fg, uint32_t bg) {
+    while (*s) {
+        bb_draw_char(x, y, *s, fg, bg);
+        x += FONT_WIDTH;
+        s++;
+    }
+}
+
 // ============ Desktop Pattern ============
 
 static void draw_desktop_pattern(void) {
@@ -94,19 +128,77 @@ static void draw_desktop_pattern(void) {
     }
 }
 
+// ============ Apple Icon (12x14 bitmap) ============
+
+#define APPLE_ICON_W 12
+#define APPLE_ICON_H 14
+
+static const uint8_t apple_icon[APPLE_ICON_H][APPLE_ICON_W] = {
+    {0,0,0,0,0,0,1,1,0,0,0,0},
+    {0,0,0,0,0,1,1,0,0,0,0,0},
+    {0,0,1,1,1,1,1,1,1,1,0,0},
+    {0,1,1,1,1,1,1,1,1,1,1,0},
+    {1,1,1,1,1,1,1,1,1,1,1,1},
+    {1,1,1,1,1,1,1,1,1,1,1,1},
+    {1,1,1,1,1,1,1,1,1,1,1,1},
+    {1,1,1,1,1,1,1,1,1,1,1,1},
+    {1,1,1,1,1,1,1,1,1,1,1,1},
+    {0,1,1,1,1,1,1,1,1,1,1,0},
+    {0,1,1,1,1,1,1,1,1,1,1,0},
+    {0,0,1,1,1,1,1,1,1,1,0,0},
+    {0,0,0,1,1,1,1,1,1,0,0,0},
+    {0,0,0,0,1,1,1,1,0,0,0,0},
+};
+
+static void draw_apple_icon(int x, int y) {
+    for (int row = 0; row < APPLE_ICON_H; row++) {
+        for (int col = 0; col < APPLE_ICON_W; col++) {
+            if (apple_icon[row][col]) {
+                bb_put_pixel(x + col, y + row, COLOR_BLACK);
+            }
+        }
+    }
+}
+
 // ============ Menu Bar ============
 
 static void draw_menu_bar(void) {
     bb_fill_rect(0, 0, screen_width, MENU_HEIGHT, COLOR_WHITE);
     bb_hline(0, MENU_HEIGHT - 1, screen_width, COLOR_BLACK);
+
+    // Draw apple icon
+    draw_apple_icon(APPLE_MENU_X, 3);
+}
+
+static void draw_apple_dropdown(void) {
+    if (!apple_menu_open) return;
+
+    int x = APPLE_MENU_X;
+    int y = MENU_HEIGHT;
+    int h = DROPDOWN_ITEM_H * 3 + 4;  // 2 items + separator + padding
+
+    // Dropdown background with shadow
+    bb_fill_rect(x + 2, y + 2, DROPDOWN_W, h, 0x00000000);
+    bb_fill_rect(x, y, DROPDOWN_W, h, COLOR_WHITE);
+    bb_rect_outline(x, y, DROPDOWN_W, h, COLOR_BLACK);
+
+    // "About VibeOS..." item
+    bb_fill_rect(x + 1, y + 2, DROPDOWN_W - 2, DROPDOWN_ITEM_H, COLOR_WHITE);
+    bb_draw_string(x + 8, y + 4, "About VibeOS...", COLOR_BLACK, COLOR_WHITE);
+
+    // Separator line
+    bb_hline(x + 1, y + 2 + DROPDOWN_ITEM_H + 2, DROPDOWN_W - 2, COLOR_BLACK);
+
+    // "Quit Desktop" item
+    bb_fill_rect(x + 1, y + 4 + DROPDOWN_ITEM_H + 4, DROPDOWN_W - 2, DROPDOWN_ITEM_H, COLOR_WHITE);
+    bb_draw_string(x + 8, y + 4 + DROPDOWN_ITEM_H + 8, "Quit Desktop", COLOR_BLACK, COLOR_WHITE);
 }
 
 static void draw_menu_text(void) {
-    api->fb_draw_string(10, 3, "@", COLOR_BLACK, COLOR_WHITE);
-    api->fb_draw_string(30, 3, "File", COLOR_BLACK, COLOR_WHITE);
-    api->fb_draw_string(70, 3, "Edit", COLOR_BLACK, COLOR_WHITE);
-    api->fb_draw_string(110, 3, "View", COLOR_BLACK, COLOR_WHITE);
-    api->fb_draw_string(160, 3, "Special", COLOR_BLACK, COLOR_WHITE);
+    bb_draw_string(30, 3, "File", COLOR_BLACK, COLOR_WHITE);
+    bb_draw_string(70, 3, "Edit", COLOR_BLACK, COLOR_WHITE);
+    bb_draw_string(110, 3, "View", COLOR_BLACK, COLOR_WHITE);
+    bb_draw_string(160, 3, "Special", COLOR_BLACK, COLOR_WHITE);
 }
 
 // ============ Window Drawing ============
@@ -150,11 +242,43 @@ static void draw_window_frame(window_t *win, int is_focused) {
     bb_hline(x, y + TITLE_HEIGHT, w, COLOR_BLACK);
 }
 
-static void draw_window_text(window_t *win) {
-    // Title
-    api->fb_draw_string(win->x + 30, win->y + 4, win->title, COLOR_BLACK, COLOR_WHITE);
+static void draw_window_content(window_t *win, int is_focused) {
+    int x = win->x, y = win->y, w = win->w, h = win->h;
 
-    // Content
+    // Fill title bar area solid white (prevents bleed-through)
+    bb_fill_rect(x + 1, y + 1, w - 2, TITLE_HEIGHT - 1, COLOR_WHITE);
+
+    // Redraw stripes for focused window
+    if (is_focused) {
+        for (int ty = 1; ty < TITLE_HEIGHT; ty++) {
+            if (ty % 2 == 1) {  // Black lines on odd rows
+                bb_hline(x + 1, y + ty, w - 2, COLOR_BLACK);
+            }
+        }
+    }
+
+    // Redraw close box
+    int cb_x = x + CLOSE_BOX_MARGIN;
+    int cb_y = y + (TITLE_HEIGHT - CLOSE_BOX_SIZE) / 2;
+    bb_fill_rect(cb_x, cb_y, CLOSE_BOX_SIZE, CLOSE_BOX_SIZE, COLOR_WHITE);
+    bb_rect_outline(cb_x, cb_y, CLOSE_BOX_SIZE, CLOSE_BOX_SIZE, COLOR_BLACK);
+
+    // Title text background and text
+    int title_len = 0;
+    for (int i = 0; win->title[i]; i++) title_len++;
+    bb_fill_rect(x + 28, y + 2, title_len * 8 + 4, 16, COLOR_WHITE);
+    bb_draw_string(x + 30, y + 4, win->title, COLOR_BLACK, COLOR_WHITE);
+
+    // Fill content area with white
+    int content_y = y + TITLE_HEIGHT + 1;
+    int content_h = h - TITLE_HEIGHT - 2;
+    bb_fill_rect(x + 1, content_y, w - 2, content_h, COLOR_WHITE);
+
+    // Redraw border and title bar separator
+    bb_rect_outline(x, y, w, h, COLOR_BLACK);
+    bb_hline(x, y + TITLE_HEIGHT, w, COLOR_BLACK);
+
+    // Draw app content
     if (win->draw_content) {
         win->draw_content(win);
     }
@@ -174,11 +298,11 @@ static void draw_all_windows_frames(void) {
 static void draw_all_windows_text(void) {
     for (int i = 0; i < window_count; i++) {
         if (windows[i].visible && i != focused_window) {
-            draw_window_text(&windows[i]);
+            draw_window_content(&windows[i], 0);
         }
     }
     if (focused_window >= 0 && windows[focused_window].visible) {
-        draw_window_text(&windows[focused_window]);
+        draw_window_content(&windows[focused_window], 1);
     }
 }
 
@@ -283,41 +407,40 @@ static int window_at_point(int px, int py) {
 // ============ Full Redraw ============
 
 static void redraw_all(int mouse_x, int mouse_y) {
-    // 1. Draw all shapes to backbuffer
+    // Draw everything to backbuffer
     draw_desktop_pattern();
     draw_menu_bar();
+    draw_menu_text();
     draw_all_windows_frames();
+    draw_all_windows_text();
+    draw_apple_dropdown();
 
-    // 2. Flip to screen
+    // Flip to screen
     flip_buffer();
 
-    // 3. Draw text directly to framebuffer
-    draw_menu_text();
-    draw_all_windows_text();
-
-    // 4. Draw cursor on top
+    // Draw cursor on top (directly to framebuffer so it's always visible)
     draw_cursor(mouse_x, mouse_y);
 }
 
 // ============ Window Content Callbacks ============
 
 static void draw_welcome_content(window_t *win) {
-    api->fb_draw_string(win->x + 20, win->y + TITLE_HEIGHT + 20,
+    bb_draw_string(win->x + 20, win->y + TITLE_HEIGHT + 20,
         "Welcome to VibeOS!", COLOR_BLACK, COLOR_WHITE);
-    api->fb_draw_string(win->x + 20, win->y + TITLE_HEIGHT + 40,
+    bb_draw_string(win->x + 20, win->y + TITLE_HEIGHT + 40,
         "Drag windows by title bar", COLOR_BLACK, COLOR_WHITE);
-    api->fb_draw_string(win->x + 20, win->y + TITLE_HEIGHT + 60,
+    bb_draw_string(win->x + 20, win->y + TITLE_HEIGHT + 60,
         "Click close box to close", COLOR_BLACK, COLOR_WHITE);
-    api->fb_draw_string(win->x + 20, win->y + TITLE_HEIGHT + 80,
-        "Press Q to quit", COLOR_BLACK, COLOR_WHITE);
+    bb_draw_string(win->x + 20, win->y + TITLE_HEIGHT + 80,
+        "Use Apple menu to quit", COLOR_BLACK, COLOR_WHITE);
 }
 
 static void draw_about_content(window_t *win) {
-    api->fb_draw_string(win->x + 20, win->y + TITLE_HEIGHT + 20,
+    bb_draw_string(win->x + 20, win->y + TITLE_HEIGHT + 20,
         "VibeOS v0.1", COLOR_BLACK, COLOR_WHITE);
-    api->fb_draw_string(win->x + 20, win->y + TITLE_HEIGHT + 40,
+    bb_draw_string(win->x + 20, win->y + TITLE_HEIGHT + 40,
         "A hobby OS by Claude", COLOR_BLACK, COLOR_WHITE);
-    api->fb_draw_string(win->x + 20, win->y + TITLE_HEIGHT + 60,
+    bb_draw_string(win->x + 20, win->y + TITLE_HEIGHT + 60,
         "System 7 vibes", COLOR_BLACK, COLOR_WHITE);
 }
 
@@ -355,7 +478,7 @@ int main(kapi_t *kapi, int argc, char **argv) {
     redraw_all(mouse_x, mouse_y);
 
     // Main event loop
-    while (1) {
+    while (!should_quit) {
         api->mouse_poll();
 
         int new_mx, new_my;
@@ -379,27 +502,71 @@ int main(kapi_t *kapi, int argc, char **argv) {
                 needs_redraw = 1;
             }
         } else if (clicked) {
-            int win_idx = window_at_point(new_mx, new_my);
+            // Check if clicking on apple icon in menu bar
+            if (point_in_rect(new_mx, new_my, APPLE_MENU_X, 0, APPLE_MENU_W, MENU_HEIGHT)) {
+                apple_menu_open = !apple_menu_open;
+                needs_redraw = 1;
+            }
+            // Check if clicking in dropdown
+            else if (apple_menu_open) {
+                int dropdown_x = APPLE_MENU_X;
+                int dropdown_y = MENU_HEIGHT;
+                int dropdown_h = DROPDOWN_ITEM_H * 3 + 4;
 
-            if (win_idx >= 0) {
-                window_t *win = &windows[win_idx];
+                if (point_in_rect(new_mx, new_my, dropdown_x, dropdown_y, DROPDOWN_W, dropdown_h)) {
+                    // Which item?
+                    int item_y = new_my - dropdown_y;
+                    if (item_y < DROPDOWN_ITEM_H + 4) {
+                        // "About VibeOS..." - open About window
+                        int has_about = 0;
+                        for (int i = 0; i < window_count; i++) {
+                            if (windows[i].visible && windows[i].title[0] == 'A') {
+                                has_about = 1;
+                                focused_window = i;
+                                break;
+                            }
+                        }
+                        if (!has_about) {
+                            create_window(150, 100, 250, 180, "About VibeOS", draw_about_content);
+                        }
+                    } else {
+                        // "Quit Desktop"
+                        should_quit = 1;
+                    }
+                }
+                apple_menu_open = 0;
+                needs_redraw = 1;
+            }
+            // Check windows
+            else {
+                int win_idx = window_at_point(new_mx, new_my);
 
-                int cb_x = win->x + CLOSE_BOX_MARGIN;
-                int cb_y = win->y + (TITLE_HEIGHT - CLOSE_BOX_SIZE) / 2;
+                if (win_idx >= 0) {
+                    window_t *win = &windows[win_idx];
 
-                if (point_in_rect(new_mx, new_my, cb_x, cb_y, CLOSE_BOX_SIZE, CLOSE_BOX_SIZE)) {
-                    close_window(win_idx);
-                    needs_redraw = 1;
-                } else if (point_in_rect(new_mx, new_my, win->x, win->y, win->w, TITLE_HEIGHT)) {
-                    dragging = 1;
-                    drag_window = win_idx;
-                    drag_offset_x = new_mx - win->x;
-                    drag_offset_y = new_my - win->y;
-                    focused_window = win_idx;
-                    needs_redraw = 1;
-                } else if (win_idx != focused_window) {
-                    focused_window = win_idx;
-                    needs_redraw = 1;
+                    int cb_x = win->x + CLOSE_BOX_MARGIN;
+                    int cb_y = win->y + (TITLE_HEIGHT - CLOSE_BOX_SIZE) / 2;
+
+                    if (point_in_rect(new_mx, new_my, cb_x, cb_y, CLOSE_BOX_SIZE, CLOSE_BOX_SIZE)) {
+                        close_window(win_idx);
+                        needs_redraw = 1;
+                    } else if (point_in_rect(new_mx, new_my, win->x, win->y, win->w, TITLE_HEIGHT)) {
+                        dragging = 1;
+                        drag_window = win_idx;
+                        drag_offset_x = new_mx - win->x;
+                        drag_offset_y = new_my - win->y;
+                        focused_window = win_idx;
+                        needs_redraw = 1;
+                    } else if (win_idx != focused_window) {
+                        focused_window = win_idx;
+                        needs_redraw = 1;
+                    }
+                } else {
+                    // Clicked on desktop background - close menu if open
+                    if (apple_menu_open) {
+                        apple_menu_open = 0;
+                        needs_redraw = 1;
+                    }
                 }
             }
         }
@@ -413,12 +580,9 @@ int main(kapi_t *kapi, int argc, char **argv) {
 
         prev_buttons = buttons;
 
-        // Check for quit
-        if (api->has_key()) {
-            int c = api->getc();
-            if (c == 'q' || c == 'Q') {
-                break;
-            }
+        // Consume any keypresses (for future use)
+        while (api->has_key()) {
+            api->getc();
         }
 
         delay(5000);

@@ -297,3 +297,19 @@ hdiutil detach /Volumes/VIBEOS # Unmount before running QEMU
 - Programs now load at 0x41000000+ with kernel picking addresses dynamically
 - Tested: desktop→snake→tetris→desktop all load at different addresses
 - **Achievement**: Dynamic loading and multitasking foundation complete!
+
+### Session 10
+- Added Apple menu with dropdown (About VibeOS..., Quit Desktop)
+- Removed Q keyboard shortcut - quit only via Apple menu now
+- Added font_data pointer to kapi for userspace text rendering
+- Fixed window rendering - all drawing now goes to backbuffer:
+  - Added bb_draw_char/bb_draw_string for backbuffer text
+  - Windows properly occlude each other (no text bleed-through)
+  - Title bars, content areas, and borders all render correctly
+- Created LONGTERM.md with roadmap
+
+**NEXT SESSION TODO (Phase 1 Desktop Apps):**
+- Build calculator app (simple, tests app architecture)
+- Build notepad app (text editing in window)
+- Build file explorer app (navigate filesystem)
+- Build terminal emulator (shell in window - biggest unlock)
