@@ -308,8 +308,19 @@ hdiutil detach /Volumes/VIBEOS # Unmount before running QEMU
   - Title bars, content areas, and borders all render correctly
 - Created LONGTERM.md with roadmap
 
+### Session 11
+- Added dock bar at bottom of screen with app icons
+- Built Calculator app (first desktop app!):
+  - Calculator icon in dock (32x32 pixel art)
+  - Click dock icon to open calculator window
+  - Working integer arithmetic (+, -, *, /)
+  - 3D button styling with proper hit detection
+  - Shows pending operation in display
+  - Fixed PIE string literal issue (2D char* array → flat char[][] array)
+- Improved menu bar layout and spacing
+- Windows can't be dragged below the dock
+
 **NEXT SESSION TODO (Phase 1 Desktop Apps):**
-- Build calculator app (simple, tests app architecture)
 - Build notepad app (text editing in window)
 - Build file explorer app (navigate filesystem)
 - Build terminal emulator (shell in window - biggest unlock)
