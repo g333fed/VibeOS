@@ -24,7 +24,7 @@ SECTIONS
     }
 
     /* Read-only data */
-    .rodata : {
+    .rodata : ALIGN(8) {
         *(.rodata)
         *(.rodata.*)
     }
@@ -42,6 +42,11 @@ SECTIONS
         *(.bss.*)
         *(COMMON)
         _bss_end = .;
+    }
+
+    /* Stack - placed after BSS so it doesn't get zeroed */
+    .stack : {
+        *(.stack)
     }
 
     /* Discard unneeded sections */

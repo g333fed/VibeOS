@@ -12,7 +12,7 @@ VibeOS is a hobby operating system built from scratch for aarch64 (ARM64), targe
 - **Human**: Vibes only. Yells "fuck yeah" when things work. Cannot provide technical guidance.
 - **Claude**: Full technical lead. Makes all architecture decisions. Wozniak energy.
 
-## Current State (Last Updated: Session 2)
+## Current State (Last Updated: Session 3)
 - [x] Bootloader (boot/boot.S) - Sets up stack, clears BSS, jumps to kernel
 - [x] Minimal kernel (kernel/kernel.c) - UART output working
 - [x] Linker script (linker.ld) - Memory layout for QEMU virt
@@ -28,17 +28,19 @@ VibeOS is a hobby operating system built from scratch for aarch64 (ARM64), targe
 - [x] Shell (kernel/shell.c) - In-kernel shell with commands
 - [x] VFS (kernel/vfs.c) - In-memory filesystem with directories and files
 - [x] Coreutils - ls, cd, pwd, mkdir, touch, cat, echo (with > redirect)
+- [x] ELF loader (kernel/elf.c) - Can load/run ELF binaries
+- [x] Process exec (kernel/process.c) - Win3.1 style, programs call kernel directly via kapi
+- [x] Kernel API (kernel/kapi.c) - Function pointers for programs to call kernel
 - [ ] Interrupts - GIC/timer code exists but disabled (breaks virtio - unknown bug)
-- [ ] Syscalls - Move shell to userspace
-- [ ] Processes - task struct, context switching, scheduler
 
 ## Architecture Decisions Made
 1. **Target**: QEMU virt machine, aarch64, Cortex-A72
 2. **Memory start**: 0x40000000 (QEMU virt default)
 3. **UART**: PL011 at 0x09000000 (QEMU virt default)
-4. **Stack**: 64KB, placed after BSS
+4. **Stack**: 64KB, placed in .stack section after BSS
 5. **Toolchain**: aarch64-elf-gcc (brew install)
 6. **Compiler flags**: -mgeneral-regs-only (no SIMD)
+7. **Process model**: Win3.1 style - no memory protection, programs run in kernel space
 
 ## Roadmap (Terminal-First)
 Phase 1: Kernel Foundations - DONE
@@ -49,20 +51,22 @@ Phase 1: Kernel Foundations - DONE
 5. ~~Shell~~ - in-kernel with basic commands
 6. ~~Filesystem~~ - in-memory VFS
 
-Phase 2: Userspace (NEXT)
-7. Syscall interface - svc instruction, syscall table
-8. Init process - first userspace program
-9. Move shell to userspace
-10. Processes - task struct, context switching
+Phase 2: Programs - MONOLITH APPROACH
+7. ~~ELF loader~~ - working but abandoned
+8. ~~Kernel API~~ - kapi struct with function pointers
+9. **DECISION**: Monolith kernel - all commands built into shell
+   - Tried external programs, hit linker issues with 6+ embedded binaries
+   - Win3.1 vibes - everything in one binary is fine
 
-Phase 3: Apps
-11. More coreutils - cp, mv, rm
-12. Text editor - minimal vi/nano style
-13. Snake - terminal-based game
+Phase 3: Apps (NEXT)
+10. Text editor - minimal vi/nano style
+11. Snake - terminal-based game
+12. More features as needed
 
 Phase 4: GUI (Future)
-14. Window manager
-15. Desktop/Finder
+13. Window manager
+14. Desktop/Finder
+15. DOOM?
 
 ## Technical Notes
 
@@ -73,25 +77,32 @@ Phase 4: GUI (Future)
 - 0x0A000000: RTC
 - 0x0A003E00: Virtio keyboard (device 31)
 - 0x40000000+: RAM (we load here)
+- 0x40200000: Program load address (if using external programs)
 
 ### Key Files
-- boot/boot.S - Entry point, CPU init
+- boot/boot.S - Entry point, CPU init, BSS clear
 - kernel/kernel.c - Main kernel code
 - kernel/memory.c/.h - Heap allocator (malloc/free)
 - kernel/string.c/.h - String/memory functions
 - kernel/printf.c/.h - Printf implementation
 - kernel/fb.c/.h - Framebuffer driver (ramfb)
-- kernel/console.c/.h - Text console
+- kernel/console.c/.h - Text console (with UART fallback)
 - kernel/font.c/.h - Bitmap font
 - kernel/keyboard.c/.h - Virtio keyboard driver
-- kernel/shell.c/.h - In-kernel shell
+- kernel/shell.c/.h - In-kernel shell with all commands
 - kernel/vfs.c/.h - In-memory filesystem
-- kernel/gic.c/.h - GIC interrupt controller (unused)
-- kernel/timer.c/.h - ARM timer (unused)
-- kernel/irq.c/.h - IRQ handling (unused)
-- kernel/exceptions.S - Exception vectors (unused)
+- kernel/elf.c/.h - ELF64 loader
+- kernel/process.c/.h - Process execution
+- kernel/kapi.c/.h - Kernel API for programs
+- kernel/initramfs.c/.h - Binary embedding (currently unused)
 - linker.ld - Memory layout
 - Makefile - Build system
+
+### User Directory (currently unused)
+- user/lib/vibe.h - Userspace library header
+- user/lib/crt0.S - C runtime startup
+- user/bin/*.c - Program sources
+- user/linker.ld - Program linker script
 
 ### Build & Run
 ```bash
@@ -118,7 +129,9 @@ make run-nographic  # Terminal only
 ### VFS Structure
 ```
 /
-├── bin/        (empty for now)
+├── bin/        (empty - monolith kernel)
+├── etc/
+│   └── motd    (message of the day)
 ├── home/
 │   └── user/   (default cwd)
 └── tmp/
@@ -127,12 +140,11 @@ make run-nographic  # Terminal only
 ## Architecture Decisions (Locked In)
 | Component | Decision | Notes |
 |-----------|----------|-------|
-| Kernel | Monolithic | Everything in kernel space, Linux-style |
-| Scheduler | Cooperative | Processes yield voluntarily, retro-authentic |
+| Kernel | Monolithic | Everything in kernel space, Win3.1-style |
+| Programs | Built-in | All commands in shell, no external binaries |
 | Memory | Flat (no MMU) | No virtual memory, shared address space |
-| Filesystem | Custom hierarchical | In-memory VFS for now |
+| Filesystem | In-memory VFS | Hierarchical, case-insensitive |
 | Shell | POSIX-ish | Familiar syntax, basic redirects |
-| Process model | fork/exec | Unix-style (future) |
 | RAM | 256MB | Configurable |
 | Interrupts | Disabled | Polling works, interrupts break virtio (bug) |
 
@@ -145,6 +157,10 @@ make run-nographic  # Terminal only
 - **Static array memset**: Don't memset large static arrays - they're already zero-initialized.
 - **Interrupts + Virtio**: Enabling GIC interrupts breaks virtio keyboard polling. Unknown root cause. Skipped for now - cooperative multitasking doesn't need interrupts anyway.
 - **-mgeneral-regs-only**: Use this flag to prevent GCC from using SIMD registers.
+- **Stack in BSS**: Boot hangs if stack is in .bss section - it gets zeroed while in use! Put stack in separate .stack section.
+- **Embedded binaries**: objcopy binary embedding breaks with 6+ programs. Linker issue. Just use monolith kernel instead.
+- **Console without framebuffer**: console_puts/putc fall back to UART if fb_base is NULL.
+- **kapi colors**: Must use uint32_t for colors (RGB values like 0x00FF00), not uint8_t.
 
 ## Session Log
 ### Session 1
@@ -169,3 +185,18 @@ make run-nographic  # Terminal only
 - Added echo with > redirect for writing files
 - Added shift key support for keyboard (uppercase, symbols like >)
 - Everything working! Shell, filesystem, keyboard all functional
+
+### Session 3
+- Attempted proper userspace with syscalls (SVC instruction)
+- SVC never triggered exception handler - extensive debugging failed
+- Pivoted to Win3.1 style: programs run in kernel space, call kapi directly
+- Built ELF loader and process execution
+- Created kapi (kernel API) - struct of function pointers
+- Fixed multiple bugs: ELF load address (0x40200000), crt0 return address, color types
+- Attempted to move shell commands to /bin as separate programs
+- Hit weird linker bug: 5 embedded programs work, 6 breaks boot
+- Extensive debugging: not size, not specific program, just "6th binary breaks it"
+- Stack was in BSS and getting zeroed - fixed by putting in .stack section
+- Still couldn't fix the 6-binary limit
+- **DECISION**: Monolith kernel. All commands stay in shell. Fuck it, it's VibeOS.
+- Final kernel: 28KB, all features working

@@ -13,6 +13,9 @@
 #include "keyboard.h"
 #include "shell.h"
 #include "vfs.h"
+#include "process.h"
+#include "initramfs.h"
+#include "kapi.h"
 
 // QEMU virt machine PL011 UART base address
 #define UART0_BASE 0x09000000
@@ -128,6 +131,16 @@ void kernel_main(void) {
 
     // Initialize filesystem
     vfs_init();
+
+    // Initialize kernel API (for userspace programs)
+    kapi_init();
+    printf("[KERNEL] Kernel API initialized\n");
+
+    // Initialize process subsystem
+    process_init();
+
+    // Load embedded binaries into VFS
+    initramfs_init();
 
     printf("\n");
     printf("[KERNEL] Starting shell...\n");

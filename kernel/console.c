@@ -9,6 +9,7 @@
 #include "fb.h"
 #include "font.h"
 #include "string.h"
+#include "printf.h"
 
 // Console state
 static int cursor_row = 0;
@@ -74,7 +75,12 @@ static void newline(void) {
 }
 
 void console_putc(char c) {
-    if (fb_base == NULL) return;
+    // If no framebuffer, fall back to UART
+    if (fb_base == NULL) {
+        extern void uart_putc(char c);
+        uart_putc(c);
+        return;
+    }
 
     switch (c) {
         case '\n':
@@ -115,6 +121,11 @@ void console_putc(char c) {
 }
 
 void console_puts(const char *s) {
+    // If no framebuffer, fall back to UART
+    if (fb_base == NULL) {
+        printf("%s", s);
+        return;
+    }
     while (*s) {
         console_putc(*s++);
     }

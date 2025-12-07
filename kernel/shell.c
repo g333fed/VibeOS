@@ -11,6 +11,7 @@
 #include "printf.h"
 #include "fb.h"
 #include "vfs.h"
+#include "process.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -25,8 +26,6 @@ static int cmd_pos = 0;
 extern size_t memory_free(void);
 extern size_t memory_used(void);
 
-// External timer function
-extern uint64_t timer_get_ticks(void);
 
 // ============ Command Handlers ============
 
@@ -142,14 +141,7 @@ static void cmd_memory(void) {
     printf("  Free: %u MB\n", free_mb);
 }
 
-static void cmd_uptime(void) {
-    uint64_t ticks = timer_get_ticks();
-    uint32_t seconds = (uint32_t)(ticks / 100);  // 100 Hz timer
-    uint32_t minutes = seconds / 60;
-    seconds = seconds % 60;
-
-    printf("Uptime: %u min %u sec (%u ticks)\n", minutes, seconds, (uint32_t)ticks);
-}
+// NOTE: uptime command removed - no timer without interrupts
 
 // ============ Filesystem Commands ============
 
@@ -418,8 +410,6 @@ static void execute_command(char *cmd) {
         cmd_version();
     } else if (str_eq(argv[0], "mem")) {
         cmd_memory();
-    } else if (str_eq(argv[0], "uptime")) {
-        cmd_uptime();
     } else if (str_eq(argv[0], "pwd")) {
         cmd_pwd();
     } else if (str_eq(argv[0], "ls")) {
@@ -433,12 +423,41 @@ static void execute_command(char *cmd) {
     } else if (str_eq(argv[0], "cat")) {
         cmd_cat(argc, argv);
     } else {
-        // Command not found
-        console_set_color(COLOR_RED, COLOR_BLACK);
-        console_puts("Unknown command: ");
-        console_set_color(COLOR_WHITE, COLOR_BLACK);
-        console_puts(argv[0]);
-        console_puts("\nType 'help' for available commands.\n");
+        // Try to execute as a program
+        // First check if it's a path
+        char path[256];
+        if (argv[0][0] == '/' || argv[0][0] == '.') {
+            // Absolute or relative path
+            strncpy(path, argv[0], sizeof(path) - 1);
+            path[sizeof(path) - 1] = '\0';
+        } else {
+            // Look in /bin
+            strcpy(path, "/bin/");
+            strncpy(path + 5, argv[0], sizeof(path) - 6);
+            path[sizeof(path) - 1] = '\0';
+        }
+
+        // Try to execute
+        vfs_node_t *prog = vfs_lookup(path);
+        if (prog && !vfs_is_dir(prog)) {
+            // Replace argv[0] with full path for the program
+            argv[0] = path;
+            int result = process_exec_args(path, argc, argv);
+            if (result < 0) {
+                console_set_color(COLOR_RED, COLOR_BLACK);
+                console_puts("Failed to execute: ");
+                console_puts(path);
+                console_putc('\n');
+                console_set_color(COLOR_WHITE, COLOR_BLACK);
+            }
+        } else {
+            // Command not found
+            console_set_color(COLOR_RED, COLOR_BLACK);
+            console_puts("Unknown command: ");
+            console_set_color(COLOR_WHITE, COLOR_BLACK);
+            console_puts(argv[0]);
+            console_puts("\nType 'help' for available commands.\n");
+        }
     }
 }
 

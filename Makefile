@@ -14,18 +14,27 @@ OBJDUMP = $(CROSS_COMPILE)objdump
 # Directories
 BOOT_DIR = boot
 KERNEL_DIR = kernel
+USER_DIR = user
 BUILD_DIR = build
+USER_BUILD_DIR = $(BUILD_DIR)/user
 
 # Source files
 BOOT_SRC = $(BOOT_DIR)/boot.S
 KERNEL_C_SRCS = $(wildcard $(KERNEL_DIR)/*.c)
 KERNEL_S_SRCS = $(wildcard $(KERNEL_DIR)/*.S)
 
+# Userspace programs (disabled - monolith kernel)
+USER_PROGS =
+
 # Object files
 BOOT_OBJ = $(BUILD_DIR)/boot.o
 KERNEL_C_OBJS = $(patsubst $(KERNEL_DIR)/%.c,$(BUILD_DIR)/%.o,$(KERNEL_C_SRCS))
 KERNEL_S_OBJS = $(patsubst $(KERNEL_DIR)/%.S,$(BUILD_DIR)/%.o,$(KERNEL_S_SRCS))
 KERNEL_OBJS = $(KERNEL_C_OBJS) $(KERNEL_S_OBJS)
+
+# Embedded binary objects (userspace programs linked into kernel)
+USER_ELFS = $(patsubst %,$(USER_BUILD_DIR)/%.elf,$(USER_PROGS))
+USER_OBJS = $(patsubst %,$(USER_BUILD_DIR)/%.o,$(USER_PROGS))
 
 # Output files
 KERNEL_ELF = $(BUILD_DIR)/vibeos.elf
@@ -36,6 +45,10 @@ CFLAGS = -ffreestanding -nostdlib -nostartfiles -mcpu=cortex-a72 -mgeneral-regs-
 ASFLAGS = -mcpu=cortex-a72
 LDFLAGS = -nostdlib -T linker.ld
 
+# Userspace compiler flags
+USER_CFLAGS = -ffreestanding -nostdlib -nostartfiles -mcpu=cortex-a72 -mgeneral-regs-only -Wall -Wextra -O2 -I$(USER_DIR)/lib
+USER_LDFLAGS = -nostdlib -T user/linker.ld
+
 # QEMU settings
 QEMU = qemu-system-aarch64
 # Graphical mode with virtio-keyboard
@@ -44,23 +57,51 @@ QEMU_FLAGS = -M virt -cpu cortex-a72 -m 256M -global virtio-mmio.force-legacy=fa
 # No-graphics mode (terminal only)
 QEMU_FLAGS_NOGRAPHIC = -M virt -cpu cortex-a72 -m 256M -nographic -kernel $(KERNEL_BIN)
 
-.PHONY: all clean run run-nographic debug
+.PHONY: all clean run run-nographic debug user
 
 all: $(KERNEL_BIN)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
+$(USER_BUILD_DIR):
+	mkdir -p $(USER_BUILD_DIR)
+
+# Boot object
 $(BOOT_OBJ): $(BOOT_SRC) | $(BUILD_DIR)
 	$(CC) $(ASFLAGS) -c $< -o $@
 
+# Kernel C objects
 $(BUILD_DIR)/%.o: $(KERNEL_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# Kernel assembly objects
 $(BUILD_DIR)/%.o: $(KERNEL_DIR)/%.S | $(BUILD_DIR)
 	$(CC) $(ASFLAGS) -c $< -o $@
 
-$(KERNEL_ELF): $(BOOT_OBJ) $(KERNEL_OBJS)
+# Userspace crt0
+$(USER_BUILD_DIR)/crt0.o: $(USER_DIR)/lib/crt0.S | $(USER_BUILD_DIR)
+	$(CC) $(ASFLAGS) -c $< -o $@
+
+# Userspace program compilation
+$(USER_BUILD_DIR)/%.prog.o: $(USER_DIR)/bin/%.c | $(USER_BUILD_DIR)
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+# Link userspace program
+$(USER_BUILD_DIR)/%.elf: $(USER_BUILD_DIR)/crt0.o $(USER_BUILD_DIR)/%.prog.o
+	$(LD) $(USER_LDFLAGS) $^ -o $@
+	@echo "Built userspace program: $@"
+
+# Convert userspace ELF to linkable object (embedded binary)
+$(USER_BUILD_DIR)/%.o: $(USER_BUILD_DIR)/%.elf
+	$(OBJCOPY) -I binary -O elf64-littleaarch64 -B aarch64 $< $@
+	@echo "Embedded binary: $@"
+
+# Build all userspace programs
+user: $(USER_ELFS)
+
+# Link kernel with embedded userspace programs
+$(KERNEL_ELF): $(BOOT_OBJ) $(KERNEL_OBJS) $(USER_OBJS)
 	$(LD) $(LDFLAGS) $^ -o $@
 
 $(KERNEL_BIN): $(KERNEL_ELF)
@@ -83,6 +124,9 @@ debug: $(KERNEL_BIN)
 
 disasm: $(KERNEL_ELF)
 	$(OBJDUMP) -d $<
+
+disasm-user: $(USER_ELFS)
+	$(OBJDUMP) -d $(USER_BUILD_DIR)/hello.elf
 
 clean:
 	rm -rf $(BUILD_DIR)
