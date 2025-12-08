@@ -199,4 +199,10 @@ void kapi_init(void) {
     kapi.window_poll_event = 0;
     kapi.window_invalidate = 0;
     kapi.window_set_title = 0;
+
+    // Stdio hooks (provided by terminal emulator, not kernel)
+    kapi.stdio_putc = 0;
+    kapi.stdio_puts = 0;
+    kapi.stdio_getc = 0;
+    kapi.stdio_has_key = 0;
 }

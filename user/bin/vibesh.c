@@ -26,6 +26,47 @@ static kapi_t *k;
 static char cmd_buf[CMD_MAX];
 static int cmd_pos;
 
+// ============ I/O Helpers (use stdio hooks if available) ============
+
+static void sh_putc(char c) {
+    if (k->stdio_putc) {
+        k->stdio_putc(c);
+    } else {
+        k->putc(c);
+    }
+}
+
+static void sh_puts(const char *s) {
+    if (k->stdio_puts) {
+        k->stdio_puts(s);
+    } else {
+        k->puts(s);
+    }
+}
+
+static int sh_getc(void) {
+    if (k->stdio_getc) {
+        return k->stdio_getc();
+    } else {
+        return k->getc();
+    }
+}
+
+static int sh_has_key(void) {
+    if (k->stdio_has_key) {
+        return k->stdio_has_key();
+    } else {
+        return k->has_key();
+    }
+}
+
+static void sh_set_color(uint32_t fg, uint32_t bg) {
+    // Only set color for console (not for terminal - it's B&W)
+    if (!k->stdio_putc) {
+        k->set_color(fg, bg);
+    }
+}
+
 // Parse command line into argc/argv
 // Modifies cmd in place (inserts null terminators)
 static int parse_command(char *cmd, char *argv[], int max_args) {
@@ -62,10 +103,10 @@ static void print_prompt(void) {
     char cwd[PATH_MAX];
     k->get_cwd(cwd, PATH_MAX);
 
-    k->set_color(COLOR_CYAN, COLOR_BLACK);
-    k->puts(cwd);
-    k->set_color(COLOR_WHITE, COLOR_BLACK);
-    k->puts(" $ ");
+    sh_set_color(COLOR_CYAN, COLOR_BLACK);
+    sh_puts(cwd);
+    sh_set_color(COLOR_WHITE, COLOR_BLACK);
+    sh_puts(" $ ");
 }
 
 // Builtin: cd
@@ -73,18 +114,18 @@ static int builtin_cd(int argc, char *argv[]) {
     if (argc < 2) {
         // No argument - go to /home/user
         if (k->set_cwd("/home/user") < 0) {
-            k->set_color(COLOR_RED, COLOR_BLACK);
-            k->puts("cd: failed\n");
-            k->set_color(COLOR_WHITE, COLOR_BLACK);
+            sh_set_color(COLOR_RED, COLOR_BLACK);
+            sh_puts("cd: failed\n");
+            sh_set_color(COLOR_WHITE, COLOR_BLACK);
             return 1;
         }
     } else {
         if (k->set_cwd(argv[1]) < 0) {
-            k->set_color(COLOR_RED, COLOR_BLACK);
-            k->puts("cd: ");
-            k->puts(argv[1]);
-            k->puts(": No such directory\n");
-            k->set_color(COLOR_WHITE, COLOR_BLACK);
+            sh_set_color(COLOR_RED, COLOR_BLACK);
+            sh_puts("cd: ");
+            sh_puts(argv[1]);
+            sh_puts(": No such directory\n");
+            sh_set_color(COLOR_WHITE, COLOR_BLACK);
             return 1;
         }
     }
@@ -93,13 +134,13 @@ static int builtin_cd(int argc, char *argv[]) {
 
 // Builtin: help
 static void builtin_help(void) {
-    k->puts("vibesh - VibeOS Shell\n\n");
-    k->puts("Builtins:\n");
-    k->puts("  cd <dir>    Change directory\n");
-    k->puts("  exit        Exit shell\n");
-    k->puts("  help        Show this help\n");
-    k->puts("\nExternal commands in /bin:\n");
-    k->puts("  echo, ls, cat, pwd, mkdir, touch, rm, vi\n");
+    sh_puts("vibesh - VibeOS Shell\n\n");
+    sh_puts("Builtins:\n");
+    sh_puts("  cd <dir>    Change directory\n");
+    sh_puts("  exit        Exit shell\n");
+    sh_puts("  help        Show this help\n");
+    sh_puts("\nExternal commands in /bin:\n");
+    sh_puts("  echo, ls, cat, pwd, mkdir, touch, rm\n");
 }
 
 // Try to execute an external command
@@ -119,10 +160,10 @@ static int exec_external(int argc, char *argv[]) {
     // Check if the file exists
     void *file = k->open(path);
     if (!file) {
-        k->set_color(COLOR_RED, COLOR_BLACK);
-        k->puts(argv[0]);
-        k->puts(": command not found\n");
-        k->set_color(COLOR_WHITE, COLOR_BLACK);
+        sh_set_color(COLOR_RED, COLOR_BLACK);
+        sh_puts(argv[0]);
+        sh_puts(": command not found\n");
+        sh_set_color(COLOR_WHITE, COLOR_BLACK);
         return 127;
     }
 
@@ -164,7 +205,7 @@ static int read_line(void) {
     cmd_buf[0] = '\0';
 
     while (1) {
-        int c = k->getc();
+        int c = sh_getc();
 
         if (c < 0) {
             // No input, yield to other processes
@@ -174,7 +215,7 @@ static int read_line(void) {
 
         if (c == '\r' || c == '\n') {
             // Enter pressed
-            k->putc('\n');
+            sh_putc('\n');
             cmd_buf[cmd_pos] = '\0';
             return 0;
         }
@@ -183,9 +224,9 @@ static int read_line(void) {
             // Backspace
             if (cmd_pos > 0) {
                 cmd_pos--;
-                k->putc('\b');
-                k->putc(' ');
-                k->putc('\b');
+                sh_putc('\b');
+                sh_putc(' ');
+                sh_putc('\b');
             }
             continue;
         }
@@ -198,20 +239,23 @@ static int read_line(void) {
         // Regular character
         if (c >= 32 && c < 127 && cmd_pos < CMD_MAX - 1) {
             cmd_buf[cmd_pos++] = (char)c;
-            k->putc((char)c);
+            sh_putc((char)c);
         }
     }
 }
 
 int main(kapi_t *api, int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+
     k = api;
 
     // Print banner
-    k->set_color(COLOR_GREEN, COLOR_BLACK);
-    k->puts("vibesh ");
-    k->set_color(COLOR_WHITE, COLOR_BLACK);
-    k->puts("- VibeOS Shell\n");
-    k->puts("Type 'help' for commands.\n\n");
+    sh_set_color(COLOR_GREEN, COLOR_BLACK);
+    sh_puts("vibesh ");
+    sh_set_color(COLOR_WHITE, COLOR_BLACK);
+    sh_puts("- VibeOS Shell\n");
+    sh_puts("Type 'help' for commands.\n\n");
 
     // Main loop
     while (1) {
@@ -228,6 +272,6 @@ int main(kapi_t *api, int argc, char **argv) {
         }
     }
 
-    k->puts("Goodbye!\n");
+    sh_puts("Goodbye!\n");
     return 0;
 }

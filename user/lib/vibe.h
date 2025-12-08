@@ -83,6 +83,13 @@ typedef struct kapi {
     int  (*window_poll_event)(int wid, int *event_type, int *data1, int *data2, int *data3);
     void (*window_invalidate)(int wid);
     void (*window_set_title)(int wid, const char *title);
+
+    // Stdio hooks (for terminal emulator)
+    // If set, shell uses these instead of console I/O
+    void (*stdio_putc)(char c);          // Write a character
+    void (*stdio_puts)(const char *s);   // Write a string
+    int  (*stdio_getc)(void);            // Read a character (-1 if none)
+    int  (*stdio_has_key)(void);         // Check if input available
 } kapi_t;
 
 // Window event types

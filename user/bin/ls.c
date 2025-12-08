@@ -6,7 +6,21 @@
 
 #include "../lib/vibe.h"
 
+static kapi_t *api;
+
+// I/O helpers - use stdio hooks if available
+static void out_putc(char c) {
+    if (api->stdio_putc) api->stdio_putc(c);
+    else api->putc(c);
+}
+
+static void out_puts(const char *s) {
+    if (api->stdio_puts) api->stdio_puts(s);
+    else api->puts(s);
+}
+
 int main(kapi_t *k, int argc, char **argv) {
+    api = k;
     const char *path = ".";
 
     if (argc > 1) {
@@ -15,18 +29,16 @@ int main(kapi_t *k, int argc, char **argv) {
 
     void *dir = k->open(path);
     if (!dir) {
-        k->set_color(COLOR_RED, COLOR_BLACK);
-        k->puts("ls: ");
-        k->puts(path);
-        k->puts(": No such file or directory\n");
-        k->set_color(COLOR_WHITE, COLOR_BLACK);
+        out_puts("ls: ");
+        out_puts(path);
+        out_puts(": No such file or directory\n");
         return 1;
     }
 
     if (!k->is_dir(dir)) {
         // It's a file, just print the name
-        k->puts(path);
-        k->putc('\n');
+        out_puts(path);
+        out_putc('\n');
         return 0;
     }
 
@@ -36,20 +48,14 @@ int main(kapi_t *k, int argc, char **argv) {
     int index = 0;
 
     while (k->readdir(dir, index, name, sizeof(name), &type) >= 0) {
+        out_puts(name);
         if (type == 2) {
             // Directory
-            k->set_color(COLOR_CYAN, COLOR_BLACK);
-            k->puts(name);
-            k->putc('/');
-        } else {
-            // File
-            k->set_color(COLOR_WHITE, COLOR_BLACK);
-            k->puts(name);
+            out_putc('/');
         }
-        k->putc('\n');
+        out_putc('\n');
         index++;
     }
 
-    k->set_color(COLOR_WHITE, COLOR_BLACK);
     return 0;
 }

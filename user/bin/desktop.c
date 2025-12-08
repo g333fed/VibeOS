@@ -1,7 +1,7 @@
 /*
  * VibeOS Desktop - Window Manager
  *
- * Classic Mac System 7 aesthetic.
+ * Classic Mac System 7 aesthetic - TRUE 1-bit black & white.
  * Manages windows for GUI apps, dock, menu bar.
  *
  * Fullscreen apps (snake, tetris) are launched with exec() and take over.
@@ -16,19 +16,23 @@
 
 // UI dimensions
 #define MENU_BAR_HEIGHT 20
-#define DOCK_HEIGHT     48
-#define TITLE_BAR_HEIGHT 18
+#define DOCK_HEIGHT     52
+#define TITLE_BAR_HEIGHT 20
 
-// Colors (System 7 style)
-#define COLOR_DESKTOP    0x00666699  // Classic Mac desktop purple/gray
-#define COLOR_MENU_BG    0x00FFFFFF
-#define COLOR_MENU_TEXT  0x00000000
-#define COLOR_TITLE_BG   0x00FFFFFF
-#define COLOR_TITLE_TEXT 0x00000000
-#define COLOR_WIN_BG     0x00FFFFFF
-#define COLOR_WIN_BORDER 0x00000000
-#define COLOR_DOCK_BG    0x00CCCCCC
-#define COLOR_HIGHLIGHT  0x00000080
+// 1-bit Colors - TRUE Mac System 7 black & white
+#define COLOR_BLACK      0x00000000
+#define COLOR_WHITE      0x00FFFFFF
+
+// Semantic color aliases (all B&W)
+#define COLOR_DESKTOP    COLOR_BLACK   // We'll dither this
+#define COLOR_MENU_BG    COLOR_WHITE
+#define COLOR_MENU_TEXT  COLOR_BLACK
+#define COLOR_TITLE_BG   COLOR_WHITE
+#define COLOR_TITLE_TEXT COLOR_BLACK
+#define COLOR_WIN_BG     COLOR_WHITE
+#define COLOR_WIN_BORDER COLOR_BLACK
+#define COLOR_DOCK_BG    COLOR_WHITE
+#define COLOR_HIGHLIGHT  COLOR_BLACK
 
 // Window limits
 #define MAX_WINDOWS 16
@@ -146,6 +150,268 @@ static void bb_draw_rect(int x, int y, int w, int h, uint32_t color) {
     bb_draw_hline(x, y + h - 1, w, color);
     bb_draw_vline(x, y, h, color);
     bb_draw_vline(x + w - 1, y, h, color);
+}
+
+// ============ Dither Patterns ============
+
+// Classic Mac desktop pattern - diagonal checkerboard
+static void bb_fill_pattern(int x, int y, int w, int h) {
+    for (int py = y; py < y + h && py < SCREEN_HEIGHT; py++) {
+        if (py < 0) continue;
+        for (int px = x; px < x + w && px < SCREEN_WIDTH; px++) {
+            if (px < 0) continue;
+            // Classic Mac diagonal pattern
+            int pattern = ((px + py) % 2 == 0) ? 1 : 0;
+            backbuffer[py * SCREEN_WIDTH + px] = pattern ? COLOR_BLACK : COLOR_WHITE;
+        }
+    }
+}
+
+// 25% gray dither (sparser dots)
+static void bb_fill_dither25(int x, int y, int w, int h) {
+    for (int py = y; py < y + h && py < SCREEN_HEIGHT; py++) {
+        if (py < 0) continue;
+        for (int px = x; px < x + w && px < SCREEN_WIDTH; px++) {
+            if (px < 0) continue;
+            int pattern = ((px % 2 == 0) && (py % 2 == 0)) ? 1 : 0;
+            backbuffer[py * SCREEN_WIDTH + px] = pattern ? COLOR_BLACK : COLOR_WHITE;
+        }
+    }
+}
+
+// ============ Apple Logo (16x16 bitmap) ============
+
+// Classic rainbow Apple logo simplified to 1-bit
+static const uint8_t apple_logo[16 * 16] = {
+    0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,
+    0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,
+    0,0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,
+    0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,
+    0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,
+    0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,
+    0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,
+    0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,
+    0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,
+    0,0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,
+    0,0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,
+    0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,
+    0,0,0,0,1,1,1,0,1,1,1,0,0,0,0,0,
+    0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,
+};
+
+static void draw_apple_logo(int x, int y) {
+    for (int py = 0; py < 16; py++) {
+        for (int px = 0; px < 16; px++) {
+            if (apple_logo[py * 16 + px]) {
+                bb_put_pixel(x + px, y + py, COLOR_BLACK);
+            }
+        }
+    }
+}
+
+// ============ Dock Icons (32x32 bitmaps) ============
+
+// Snake icon - coiled snake
+static const uint8_t icon_snake[32 * 32] = {
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,1,1,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,0,0,0,1,1,1,0,0,0,0,0,1,1,1,0,0,0,1,1,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,0,0,0,1,1,0,0,0,0,0,0,0,1,1,0,0,0,1,1,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,1,0,0,1,1,0,0,0,0,0,0,0,1,1,0,0,1,1,1,0,0,0,0,0,0,0,
+    0,0,0,0,0,1,1,0,0,1,1,0,0,0,0,0,0,0,1,1,0,0,1,1,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,1,1,0,0,1,1,0,0,0,0,0,0,0,1,1,0,0,1,1,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,1,1,1,0,1,1,0,0,0,0,0,0,0,1,1,0,1,1,1,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,1,1,0,1,1,1,0,0,0,0,0,1,1,1,0,1,1,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,1,1,1,0,1,1,1,1,1,1,1,1,1,0,1,1,1,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,1,1,1,0,1,1,1,1,1,1,1,0,1,1,1,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+};
+
+// Tetris icon - falling blocks
+static const uint8_t icon_tetris[32 * 32] = {
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,0,0,0,1,1,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,0,0,0,1,1,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,1,0,0,0,1,1,1,1,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,1,0,0,0,1,1,1,1,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,1,0,0,0,1,1,1,1,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,1,0,0,0,1,1,1,1,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+};
+
+// Calculator icon - cute retro calc
+static const uint8_t icon_calc[32 * 32] = {
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,
+    0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,
+    0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,
+    0,0,0,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,
+    0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,
+    0,0,0,1,1,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,1,1,0,0,1,1,0,1,1,0,0,0,
+    0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,
+    0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,
+    0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,
+    0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+};
+
+// Files/Folder icon - classic Mac folder
+static const uint8_t icon_files[32 * 32] = {
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,
+    0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,
+    0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,
+    0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,
+    0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,
+    0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,
+    0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,
+    0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,
+    0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,
+    0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,
+    0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,
+    0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,
+    0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,
+    0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,
+    0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,
+    0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,
+    0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,
+    0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,
+    0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,
+    0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+};
+
+// Terminal icon - classic CRT monitor with >_ prompt
+static const uint8_t icon_term[32 * 32] = {
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,
+    0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,
+    0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,0,0,0,0,1,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+    0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,
+    0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+};
+
+// Icon data array for dock
+static const uint8_t *icon_bitmaps[] = {
+    icon_snake,
+    icon_tetris,
+    icon_calc,
+    icon_files,
+    icon_term,
+};
+
+static void draw_icon_bitmap(int x, int y, const uint8_t *bitmap, int inverted) {
+    uint32_t fg = inverted ? COLOR_WHITE : COLOR_BLACK;
+    uint32_t bg = inverted ? COLOR_BLACK : COLOR_WHITE;
+
+    for (int py = 0; py < 32; py++) {
+        for (int px = 0; px < 32; px++) {
+            uint32_t color = bitmap[py * 32 + px] ? fg : bg;
+            bb_put_pixel(x + px, y + py, color);
+        }
+    }
 }
 
 // ============ Window Management ============
@@ -330,21 +596,23 @@ static void wm_window_set_title(int wid, const char *title) {
 // ============ Dock ============
 
 #define DOCK_ICON_SIZE 32
-#define DOCK_PADDING 8
+#define DOCK_PADDING 12
+#define DOCK_LABEL_HEIGHT 12
 
-// Dock icons (simple for now)
+// Dock icons with bitmap indices
 static dock_icon_t dock_icons[] = {
     { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "Snake",  "/bin/snake",  1 },
     { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "Tetris", "/bin/tetris", 1 },
     { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "Calc",   "/bin/calc",   0 },
     { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "Files",  "/bin/files",  0 },
+    { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "Term",   "/bin/term",   0 },
 };
 #define NUM_DOCK_ICONS (sizeof(dock_icons) / sizeof(dock_icons[0]))
 
 static void init_dock_positions(void) {
     int total_width = NUM_DOCK_ICONS * (DOCK_ICON_SIZE + DOCK_PADDING) - DOCK_PADDING;
     int start_x = (SCREEN_WIDTH - total_width) / 2;
-    int y = SCREEN_HEIGHT - DOCK_HEIGHT + (DOCK_HEIGHT - DOCK_ICON_SIZE) / 2;
+    int y = SCREEN_HEIGHT - DOCK_HEIGHT + 6;  // Top padding
 
     for (int i = 0; i < (int)NUM_DOCK_ICONS; i++) {
         dock_icons[i].x = start_x + i * (DOCK_ICON_SIZE + DOCK_PADDING);
@@ -352,33 +620,38 @@ static void init_dock_positions(void) {
     }
 }
 
-static void draw_dock_icon(dock_icon_t *icon, int highlight) {
-    uint32_t bg = highlight ? COLOR_HIGHLIGHT : COLOR_DOCK_BG;
-    uint32_t fg = highlight ? COLOR_WHITE : COLOR_BLACK;
+static void draw_dock_icon(dock_icon_t *icon, int icon_idx, int highlight) {
+    // Draw the bitmap icon
+    draw_icon_bitmap(icon->x, icon->y, icon_bitmaps[icon_idx], highlight);
 
-    // Draw icon background
-    bb_fill_rect(icon->x, icon->y, DOCK_ICON_SIZE, DOCK_ICON_SIZE, bg);
-    bb_draw_rect(icon->x, icon->y, DOCK_ICON_SIZE, DOCK_ICON_SIZE, COLOR_BLACK);
+    // Draw label below icon
+    int label_len = strlen(icon->label);
+    int label_x = icon->x + (DOCK_ICON_SIZE - label_len * 8) / 2;
+    int label_y = icon->y + DOCK_ICON_SIZE + 2;
 
-    // Draw first letter of label as icon
-    char c = icon->label[0];
-    int cx = icon->x + (DOCK_ICON_SIZE - 8) / 2;
-    int cy = icon->y + (DOCK_ICON_SIZE - 16) / 2;
-    bb_draw_char(cx, cy, c, fg, bg);
+    // Label background (inverted if highlighted)
+    if (highlight) {
+        bb_fill_rect(label_x - 2, label_y - 1, label_len * 8 + 4, 10, COLOR_BLACK);
+        bb_draw_string(label_x, label_y, icon->label, COLOR_WHITE, COLOR_BLACK);
+    } else {
+        bb_draw_string(label_x, label_y, icon->label, COLOR_BLACK, COLOR_WHITE);
+    }
 }
 
 static void draw_dock(void) {
-    // Dock background
-    bb_fill_rect(0, SCREEN_HEIGHT - DOCK_HEIGHT, SCREEN_WIDTH, DOCK_HEIGHT, COLOR_DOCK_BG);
+    // Dock background - white with top border
+    bb_fill_rect(0, SCREEN_HEIGHT - DOCK_HEIGHT, SCREEN_WIDTH, DOCK_HEIGHT, COLOR_WHITE);
+    // Double line at top for 3D effect
     bb_draw_hline(0, SCREEN_HEIGHT - DOCK_HEIGHT, SCREEN_WIDTH, COLOR_BLACK);
+    bb_draw_hline(0, SCREEN_HEIGHT - DOCK_HEIGHT + 2, SCREEN_WIDTH, COLOR_BLACK);
 
     // Icons
     for (int i = 0; i < (int)NUM_DOCK_ICONS; i++) {
         int highlight = (mouse_y >= dock_icons[i].y &&
-                        mouse_y < dock_icons[i].y + DOCK_ICON_SIZE &&
+                        mouse_y < dock_icons[i].y + DOCK_ICON_SIZE + DOCK_LABEL_HEIGHT &&
                         mouse_x >= dock_icons[i].x &&
                         mouse_x < dock_icons[i].x + DOCK_ICON_SIZE);
-        draw_dock_icon(&dock_icons[i], highlight);
+        draw_dock_icon(&dock_icons[i], i, highlight);
     }
 }
 
@@ -397,19 +670,40 @@ static int dock_icon_at_point(int x, int y) {
 static void draw_menu_bar(void) {
     // Background
     bb_fill_rect(0, 0, SCREEN_WIDTH, MENU_BAR_HEIGHT, COLOR_MENU_BG);
+    // Bottom border - double line for 3D effect
+    bb_draw_hline(0, MENU_BAR_HEIGHT - 2, SCREEN_WIDTH, COLOR_BLACK);
     bb_draw_hline(0, MENU_BAR_HEIGHT - 1, SCREEN_WIDTH, COLOR_BLACK);
 
-    // Apple menu (filled apple-ish symbol)
-    bb_draw_char(4, 2, '@', COLOR_BLACK, COLOR_MENU_BG);  // Placeholder
+    // Apple logo in menu bar
+    draw_apple_logo(4, 2);
 
-    // Menu items
-    bb_draw_string(20, 2, "File", COLOR_MENU_TEXT, COLOR_MENU_BG);
-    bb_draw_string(60, 2, "Edit", COLOR_MENU_TEXT, COLOR_MENU_BG);
-    bb_draw_string(100, 2, "View", COLOR_MENU_TEXT, COLOR_MENU_BG);
-    bb_draw_string(148, 2, "Special", COLOR_MENU_TEXT, COLOR_MENU_BG);
+    // Menu items with proper spacing
+    bb_draw_string(26, 2, "File", COLOR_MENU_TEXT, COLOR_MENU_BG);
+    bb_draw_string(66, 2, "Edit", COLOR_MENU_TEXT, COLOR_MENU_BG);
+    bb_draw_string(106, 2, "View", COLOR_MENU_TEXT, COLOR_MENU_BG);
+    bb_draw_string(154, 2, "Special", COLOR_MENU_TEXT, COLOR_MENU_BG);
+
+    // Clock on right side (just for aesthetics)
+    bb_draw_string(SCREEN_WIDTH - 52, 2, "12:00", COLOR_MENU_TEXT, COLOR_MENU_BG);
 }
 
 // ============ Window Drawing ============
+
+// Draw System 7 style horizontal stripes for title bar
+static void draw_title_stripes(int x, int y, int w, int h) {
+    for (int row = 0; row < h; row++) {
+        // Every other row is black (creates stripe effect)
+        if (row % 2 == 1) {
+            for (int col = 0; col < w; col++) {
+                bb_put_pixel(x + col, y + row, COLOR_BLACK);
+            }
+        } else {
+            for (int col = 0; col < w; col++) {
+                bb_put_pixel(x + col, y + row, COLOR_WHITE);
+            }
+        }
+    }
+}
 
 static void draw_window(int wid) {
     if (wid < 0 || !windows[wid].active) return;
@@ -417,43 +711,62 @@ static void draw_window(int wid) {
 
     int is_focused = (wid == focused_window);
 
-    // Window border
-    bb_draw_rect(w->x, w->y, w->w, w->h, COLOR_WIN_BORDER);
+    // Outer shadow (drop shadow effect)
+    bb_fill_rect(w->x + 2, w->y + w->h, w->w, 2, COLOR_BLACK);
+    bb_fill_rect(w->x + w->w, w->y + 2, 2, w->h, COLOR_BLACK);
 
-    // Title bar with stripes (System 7 style)
+    // Window background
+    bb_fill_rect(w->x, w->y, w->w, w->h, COLOR_WHITE);
+
+    // Window border (double line)
+    bb_draw_rect(w->x, w->y, w->w, w->h, COLOR_BLACK);
+    bb_draw_rect(w->x + 1, w->y + 1, w->w - 2, w->h - 2, COLOR_BLACK);
+
+    // Title bar area
     if (is_focused) {
-        // Striped title bar
-        for (int row = 0; row < TITLE_BAR_HEIGHT - 1; row++) {
-            uint32_t color = (row % 2 == 0) ? COLOR_WHITE : 0x00CCCCCC;
-            bb_fill_rect(w->x + 1, w->y + 1 + row, w->w - 2, 1, color);
-        }
-    } else {
-        bb_fill_rect(w->x + 1, w->y + 1, w->w - 2, TITLE_BAR_HEIGHT - 1, COLOR_WHITE);
+        // Striped title bar (System 7 signature look)
+        // Leave space for close box and title
+        int stripe_start = w->x + 20;  // After close box
+        int stripe_end = w->x + w->w - 20;  // Before right edge
+        int title_len = strlen(w->title);
+        int title_width = title_len * 8 + 8;  // Title + padding
+        int title_start = w->x + (w->w - title_width) / 2;
+
+        // Left stripes
+        draw_title_stripes(stripe_start, w->y + 4, title_start - stripe_start - 4, TITLE_BAR_HEIGHT - 8);
+
+        // Right stripes
+        draw_title_stripes(title_start + title_width + 4, w->y + 4,
+                          stripe_end - (title_start + title_width + 4), TITLE_BAR_HEIGHT - 8);
     }
 
     // Title bar bottom line
-    bb_draw_hline(w->x, w->y + TITLE_BAR_HEIGHT, w->w, COLOR_WIN_BORDER);
+    bb_draw_hline(w->x + 1, w->y + TITLE_BAR_HEIGHT, w->w - 2, COLOR_BLACK);
 
-    // Close box (left side)
-    int close_x = w->x + 4;
-    int close_y = w->y + 3;
-    bb_fill_rect(close_x, close_y, 12, 12, COLOR_WHITE);
-    bb_draw_rect(close_x, close_y, 12, 12, COLOR_BLACK);
+    // Close box (left side) - System 7 style with inner box
+    int close_x = w->x + 6;
+    int close_y = w->y + 4;
+    bb_fill_rect(close_x, close_y, 13, 13, COLOR_WHITE);
+    bb_draw_rect(close_x, close_y, 13, 13, COLOR_BLACK);
+    if (is_focused) {
+        // Inner box when focused
+        bb_draw_rect(close_x + 3, close_y + 3, 7, 7, COLOR_BLACK);
+    }
 
-    // Title text (centered)
+    // Title text (centered, bold effect with double-draw)
     int title_len = strlen(w->title);
     int title_x = w->x + (w->w - title_len * 8) / 2;
-    int title_y = w->y + 2;
-    bb_draw_string(title_x, title_y, w->title, COLOR_TITLE_TEXT, is_focused ? 0x00CCCCCC : COLOR_WHITE);
+    int title_y = w->y + 3;
+    bb_draw_string(title_x, title_y, w->title, COLOR_BLACK, COLOR_WHITE);
 
     // Content area - copy from window buffer
-    int content_y = w->y + TITLE_BAR_HEIGHT + 1;
-    int content_h = w->h - TITLE_BAR_HEIGHT - 2;
-    int content_w = w->w - 2;
+    int content_y = w->y + TITLE_BAR_HEIGHT + 2;
+    int content_h = w->h - TITLE_BAR_HEIGHT - 4;
+    int content_w = w->w - 4;
 
     for (int py = 0; py < content_h; py++) {
         for (int px = 0; px < content_w; px++) {
-            int screen_x = w->x + 1 + px;
+            int screen_x = w->x + 2 + px;
             int screen_y = content_y + py;
             if (screen_x < SCREEN_WIDTH && screen_y < SCREEN_HEIGHT) {
                 backbuffer[screen_y * SCREEN_WIDTH + screen_x] =
@@ -505,9 +818,9 @@ static void draw_cursor(int x, int y) {
 // ============ Main Drawing ============
 
 static void draw_desktop(void) {
-    // Desktop background
-    bb_fill_rect(0, MENU_BAR_HEIGHT, SCREEN_WIDTH,
-                 SCREEN_HEIGHT - MENU_BAR_HEIGHT - DOCK_HEIGHT, COLOR_DESKTOP);
+    // Desktop background - classic Mac diagonal checkerboard pattern
+    bb_fill_pattern(0, MENU_BAR_HEIGHT, SCREEN_WIDTH,
+                    SCREEN_HEIGHT - MENU_BAR_HEIGHT - DOCK_HEIGHT);
 
     // Menu bar
     draw_menu_bar();
@@ -551,11 +864,11 @@ static void handle_mouse_click(int x, int y) {
 
         // Check if click is on title bar
         if (y >= w->y && y < w->y + TITLE_BAR_HEIGHT) {
-            // Check close box
-            int close_x = w->x + 4;
-            int close_y = w->y + 3;
-            if (x >= close_x && x < close_x + 12 &&
-                y >= close_y && y < close_y + 12) {
+            // Check close box (updated position)
+            int close_x = w->x + 6;
+            int close_y = w->y + 4;
+            if (x >= close_x && x < close_x + 13 &&
+                y >= close_y && y < close_y + 13) {
                 // Close window
                 push_event(wid, WIN_EVENT_CLOSE, 0, 0, 0);
                 return;

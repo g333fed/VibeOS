@@ -6,7 +6,21 @@
 
 #include "../lib/vibe.h"
 
+static kapi_t *api;
+
+static void out_putc(char c) {
+    if (api->stdio_putc) api->stdio_putc(c);
+    else api->putc(c);
+}
+
+static void out_puts(const char *s) {
+    if (api->stdio_puts) api->stdio_puts(s);
+    else api->puts(s);
+}
+
 int main(kapi_t *k, int argc, char **argv) {
+    api = k;
+
     // Check for output redirection
     int redir_idx = -1;
     for (int i = 1; i < argc; i++) {
@@ -21,11 +35,9 @@ int main(kapi_t *k, int argc, char **argv) {
         char *filename = argv[redir_idx + 1];
         void *file = k->create(filename);
         if (!file) {
-            k->set_color(COLOR_RED, COLOR_BLACK);
-            k->puts("echo: cannot create ");
-            k->puts(filename);
-            k->putc('\n');
-            k->set_color(COLOR_WHITE, COLOR_BLACK);
+            out_puts("echo: cannot create ");
+            out_puts(filename);
+            out_putc('\n');
             return 1;
         }
 
@@ -48,12 +60,12 @@ int main(kapi_t *k, int argc, char **argv) {
     } else {
         // Print to console
         for (int i = 1; i < argc; i++) {
-            k->puts(argv[i]);
+            out_puts(argv[i]);
             if (i < argc - 1) {
-                k->putc(' ');
+                out_putc(' ');
             }
         }
-        k->putc('\n');
+        out_putc('\n');
     }
 
     return 0;

@@ -6,9 +6,18 @@
 
 #include "../lib/vibe.h"
 
+static kapi_t *api;
+
+static void out_puts(const char *s) {
+    if (api->stdio_puts) api->stdio_puts(s);
+    else api->puts(s);
+}
+
 int main(kapi_t *k, int argc, char **argv) {
+    api = k;
+
     if (argc < 2) {
-        k->puts("Usage: cat <file> [...]\n");
+        out_puts("Usage: cat <file> [...]\n");
         return 1;
     }
 
@@ -17,21 +26,17 @@ int main(kapi_t *k, int argc, char **argv) {
     for (int i = 1; i < argc; i++) {
         void *file = k->open(argv[i]);
         if (!file) {
-            k->set_color(COLOR_RED, COLOR_BLACK);
-            k->puts("cat: ");
-            k->puts(argv[i]);
-            k->puts(": No such file\n");
-            k->set_color(COLOR_WHITE, COLOR_BLACK);
+            out_puts("cat: ");
+            out_puts(argv[i]);
+            out_puts(": No such file\n");
             status = 1;
             continue;
         }
 
         if (k->is_dir(file)) {
-            k->set_color(COLOR_RED, COLOR_BLACK);
-            k->puts("cat: ");
-            k->puts(argv[i]);
-            k->puts(": Is a directory\n");
-            k->set_color(COLOR_WHITE, COLOR_BLACK);
+            out_puts("cat: ");
+            out_puts(argv[i]);
+            out_puts(": Is a directory\n");
             status = 1;
             continue;
         }
@@ -43,7 +48,7 @@ int main(kapi_t *k, int argc, char **argv) {
 
         while ((bytes = k->read(file, buf, sizeof(buf) - 1, offset)) > 0) {
             buf[bytes] = '\0';
-            k->puts(buf);
+            out_puts(buf);
             offset += bytes;
         }
     }
