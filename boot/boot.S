@@ -134,10 +134,10 @@ at_el1:
     str     w10, [x9]
 
     // Set up the stack pointer (stack grows downward)
-    // Stack is at end of first 64KB of RAM
+    // Stack is at 1MB into RAM (well above BSS which can grow)
     mov     w10, #'S'
     str     w10, [x9]
-    mov     x0, #0x40010000       // Stack top in RAM
+    ldr     x0, =0x40100000       // Stack top in RAM (1MB)
     mov     sp, x0
     mov     w10, #'s'
     str     w10, [x9]

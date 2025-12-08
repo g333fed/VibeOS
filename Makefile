@@ -24,7 +24,7 @@ KERNEL_C_SRCS = $(wildcard $(KERNEL_DIR)/*.c)
 KERNEL_S_SRCS = $(wildcard $(KERNEL_DIR)/*.S)
 
 # Userspace programs to build and install to disk
-USER_PROGS = snake tetris desktop calc vibesh echo ls cat pwd mkdir touch rm term uptime sysmon textedit files date
+USER_PROGS = snake tetris desktop calc vibesh echo ls cat pwd mkdir touch rm term uptime sysmon textedit files date play
 
 # Object files
 BOOT_OBJ = $(BUILD_DIR)/boot.o
@@ -41,24 +41,23 @@ KERNEL_BIN = $(BUILD_DIR)/vibeos.bin
 DISK_IMG = disk.img
 DISK_SIZE = 64
 
-# Compiler flags
-CFLAGS = -ffreestanding -nostdlib -nostartfiles -mcpu=cortex-a72 -mgeneral-regs-only -Wall -Wextra -O2 -I$(KERNEL_DIR)
+# Compiler flags - use -O0 everywhere to avoid optimization issues
+CFLAGS = -ffreestanding -nostdlib -nostartfiles -mcpu=cortex-a72 -mgeneral-regs-only -Wall -Wextra -O0 -I$(KERNEL_DIR)
 ASFLAGS = -mcpu=cortex-a72
 LDFLAGS = -nostdlib -T linker.ld
 
 # Userspace compiler flags (PIE for position-independent loading)
-# Use -O0 to ensure relocations are generated for static pointer initializers
 USER_CFLAGS = -ffreestanding -nostdlib -nostartfiles -mcpu=cortex-a72 -mgeneral-regs-only -fPIE -Wall -Wextra -O0 -I$(USER_DIR)/lib
 USER_LDFLAGS = -nostdlib -pie -T user/linker.ld
 
 # QEMU settings
 QEMU = qemu-system-aarch64
-# Graphical mode with virtio-keyboard, virtio-tablet (mouse), and virtio-blk disk
+# Graphical mode with virtio-keyboard, virtio-tablet (mouse), virtio-blk disk, and virtio-sound
 # Use force-legacy=false to get modern virtio (version 2) which is easier to program
 # Use secure=on and -bios to boot at EL3 with full GIC access
-QEMU_FLAGS = -M virt,secure=on -cpu cortex-a72 -m 256M -rtc base=utc,clock=host -global virtio-mmio.force-legacy=false -device ramfb -device virtio-blk-device,drive=hd0 -drive file=$(DISK_IMG),if=none,format=raw,id=hd0 -device virtio-keyboard-device -device virtio-tablet-device -serial stdio -bios $(KERNEL_BIN)
+QEMU_FLAGS = -M virt,secure=on -cpu cortex-a72 -m 256M -rtc base=utc,clock=host -global virtio-mmio.force-legacy=false -device ramfb -device virtio-blk-device,drive=hd0 -drive file=$(DISK_IMG),if=none,format=raw,id=hd0 -device virtio-keyboard-device -device virtio-tablet-device -device virtio-sound-device,audiodev=audio0 -audiodev coreaudio,id=audio0 -serial stdio -bios $(KERNEL_BIN)
 # No-graphics mode (terminal only) - no keyboard in nographic mode
-QEMU_FLAGS_NOGRAPHIC = -M virt,secure=on -cpu cortex-a72 -m 256M -rtc base=utc,clock=host -global virtio-mmio.force-legacy=false -device virtio-blk-device,drive=hd0 -drive file=$(DISK_IMG),if=none,format=raw,id=hd0 -nographic -bios $(KERNEL_BIN)
+QEMU_FLAGS_NOGRAPHIC = -M virt,secure=on -cpu cortex-a72 -m 256M -rtc base=utc,clock=host -global virtio-mmio.force-legacy=false -device virtio-blk-device,drive=hd0 -drive file=$(DISK_IMG),if=none,format=raw,id=hd0 -device virtio-sound-device,audiodev=audio0 -audiodev coreaudio,id=audio0 -nographic -bios $(KERNEL_BIN)
 
 .PHONY: all clean run run-nographic debug user disk install-user
 
@@ -77,14 +76,6 @@ $(BOOT_OBJ): $(BOOT_SRC) | $(BUILD_DIR)
 # Kernel C objects
 $(BUILD_DIR)/%.o: $(KERNEL_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-
-# virtio_blk needs -O0 to prevent optimization issues
-$(BUILD_DIR)/virtio_blk.o: $(KERNEL_DIR)/virtio_blk.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -O0 -c $< -o $@
-
-# fat32 needs -O0 to prevent optimization issues with LFN code
-$(BUILD_DIR)/fat32.o: $(KERNEL_DIR)/fat32.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -O0 -c $< -o $@
 
 # Kernel assembly objects
 $(BUILD_DIR)/%.o: $(KERNEL_DIR)/%.S | $(BUILD_DIR)

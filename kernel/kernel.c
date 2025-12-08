@@ -20,6 +20,7 @@
 #include "mouse.h"
 #include "irq.h"
 #include "rtc.h"
+#include "virtio_sound.h"
 
 // QEMU virt machine PL011 UART base address
 #define UART0_BASE 0x09000000
@@ -170,6 +171,9 @@ void kernel_main(void) {
 
     // Initialize block device (for persistent storage)
     virtio_blk_init();
+
+    // Initialize sound device (for audio playback)
+    virtio_sound_init();
 
     // Initialize filesystem (will use FAT32 if disk available)
     vfs_init();

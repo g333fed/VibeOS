@@ -14,7 +14,7 @@ VibeOS is a hobby operating system built from scratch for aarch64 (ARM64), targe
 - **Human**: Vibes only. Yells "fuck yeah" when things work. Cannot provide technical guidance.
 - **Claude**: Full technical lead. Makes all architecture decisions. Wozniak energy.
 
-## Current State (Last Updated: Session 22)
+## Current State (Last Updated: Session 23)
 - [x] Bootloader (boot/boot.S) - Sets up stack, clears BSS, jumps to kernel
 - [x] Minimal kernel (kernel/kernel.c) - UART output working
 - [x] Linker script (linker.ld) - Memory layout for QEMU virt
@@ -47,6 +47,7 @@ VibeOS is a hobby operating system built from scratch for aarch64 (ARM64), targe
 - [x] Menu bar - Apple menu with About/Quit, File menu, Edit menu
 - [x] About dialog - Shows VibeOS version, memory, uptime
 - [x] Power management - WFI-based idle, mouse interrupt-driven, 100Hz UI refresh
+- [x] Virtio Sound - Audio playback via virtio-sound device, WAV file support
 
 ## Architecture Decisions Made
 1. **Target**: QEMU virt machine, aarch64, Cortex-A72
@@ -120,6 +121,7 @@ Phase 4: GUI (IN PROGRESS)
 - kernel/context.S - Assembly context switch routine
 - kernel/kapi.c/.h - Kernel API for programs
 - kernel/initramfs.c/.h - Binary embedding (currently unused)
+- kernel/virtio_sound.c/.h - Virtio sound driver (WAV playback)
 - linker.ld - Memory layout (flash + RAM regions)
 - Makefile - Build system
 - disk.img - FAT32 disk image (created by `make disk`)
@@ -218,6 +220,9 @@ hdiutil detach /Volumes/VIBEOS # Unmount before running QEMU
 - **WFI in scheduler**: When a process yields and it's the only runnable process, WFI before returning to it. This prevents busy-wait loops from cooking the CPU. The kernel handles idle, not individual apps.
 - **Don't double-sleep**: If kernel WFIs on idle, apps shouldn't also sleep_ms() - that causes double delay and sluggish UI. Apps just yield(), kernel handles the rest.
 - **FAT32 LFN + GCC -O2**: The LFN entry building code crashes with -O2 optimization. Use -O0 for fat32.c. Symptom: translation fault when writing to valid heap memory. Root cause unknown but likely optimizer generating bad code for the byte-by-byte LFN entry construction.
+- **Stack must be above BSS**: As kernel grows, BSS section grows. Stack pointer must be well above BSS end. Originally at 0x40010000, but BSS grew to 0x400290d4 - stack was inside BSS and got zeroed during boot! Moved to 0x40100000 (1MB into RAM).
+- **_data_load must be 8-byte aligned**: AArch64 `ldr x3, [x0]` instruction requires 8-byte alignment. If `_data_load` in linker script is not aligned, boot hangs during .data copy loop. Add `. = ALIGN(8);` before `_data_load = .;`.
+- **Build with -O0 for safety**: GCC optimization causes subtle bugs in OS code - PIE relocations, LFN construction, possibly virtio drivers. Using -O0 everywhere avoids these issues at cost of larger/slower code.
 
 ## Session Log
 ### Session 1
@@ -589,6 +594,36 @@ hdiutil detach /Volumes/VIBEOS # Unmount before running QEMU
   - GCC -O2 generates bad code for LFN byte manipulation
   - Caused translation faults when writing to valid heap memory
 - **Achievement**: Full LFN support! `touch "my long filename.txt"` works!
+
+### Session 23
+- **Virtio Sound Driver - Audio playback working!**
+  - Built complete virtio-sound driver (kernel/virtio_sound.c, kernel/virtio_sound.h)
+  - Device ID 25, virtqueues: controlq (0), eventq (1), txq (2), rxq (3)
+  - PCM stream lifecycle: set_params → prepare → start → submit data → stop
+  - WAV file parsing with format/rate detection
+  - Supports 44100Hz, 48000Hz sample rates; 16-bit stereo/mono
+- **New files:**
+  - `kernel/virtio_sound.c` - Full virtio sound driver (~600 lines)
+  - `kernel/virtio_sound.h` - Public API: play_wav, stop, is_playing
+  - `user/bin/play.c` - Userspace play command
+- **Added to kapi:**
+  - `sound_play_wav(data, size)` - Play WAV from memory
+  - `sound_stop()` - Stop playback
+  - `sound_is_playing()` - Check if playing
+- **QEMU flags updated:**
+  - Added `-device virtio-sound-device,audiodev=audio0 -audiodev coreaudio,id=audio0`
+- **Critical boot fixes:**
+  - Stack was at 0x40010000, inside BSS (0x40001000-0x400290d4) - getting overwritten!
+  - Moved stack to 0x40100000 (1MB into RAM) in boot.S
+  - `_data_load` at 0x1a9bb was NOT 8-byte aligned - caused hang during data copy
+  - Added `. = ALIGN(8);` before `_data_load = .;` in linker.ld
+- **Build change:**
+  - Changed to `-O0` everywhere (both kernel and userspace) to avoid optimization issues
+- **Fixed slow file loading:**
+  - `play.c` was reading file twice: once to get size, once to load data
+  - Added `file_size()` to kapi - returns vfs_node->size directly
+  - Now files load instantly instead of 7+ seconds
+- **Achievement**: VibeOS can play audio! `play /beep.wav` works!
 
 **NEXT SESSION TODO:**
 - Copy/Paste clipboard support

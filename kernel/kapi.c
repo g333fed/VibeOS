@@ -12,6 +12,7 @@
 #include "mouse.h"
 #include "irq.h"
 #include "rtc.h"
+#include "virtio_sound.h"
 
 // Global kernel API instance
 kapi_t kapi;
@@ -93,6 +94,13 @@ static int kapi_write(void *file, const char *buf, size_t size) {
 // Wrapper for is_dir
 static int kapi_is_dir(void *node) {
     return vfs_is_dir((vfs_node_t *)node);
+}
+
+// Wrapper for file_size
+static int kapi_file_size(void *node) {
+    if (!node) return -1;
+    vfs_node_t *n = (vfs_node_t *)node;
+    return (int)n->size;
 }
 
 // Wrapper for create
@@ -181,6 +189,7 @@ void kapi_init(void) {
     kapi.read = kapi_read;
     kapi.write = kapi_write;
     kapi.is_dir = kapi_is_dir;
+    kapi.file_size = kapi_file_size;
     kapi.create = kapi_create;
     kapi.mkdir = kapi_mkdir;
     kapi.delete = kapi_delete;
@@ -246,4 +255,9 @@ void kapi_init(void) {
     // Power management / timing
     kapi.wfi = wfi;
     kapi.sleep_ms = sleep_ms;
+
+    // Sound
+    kapi.sound_play_wav = virtio_sound_play_wav;
+    kapi.sound_stop = virtio_sound_stop;
+    kapi.sound_is_playing = virtio_sound_is_playing;
 }

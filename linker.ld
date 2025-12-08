@@ -35,7 +35,8 @@ SECTIONS
         *(.rodata.*)
     } > FLASH
 
-    /* End of flash content - save for data copy */
+    /* End of flash content - save for data copy (must be 8-byte aligned for ldr) */
+    . = ALIGN(8);
     _data_load = .;
 
     /* Initialized data - loaded from flash, runs in RAM */

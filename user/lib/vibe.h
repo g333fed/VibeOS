@@ -39,6 +39,7 @@ typedef struct kapi {
     int   (*read)(void *file, char *buf, size_t size, size_t offset);
     int   (*write)(void *file, const char *buf, size_t size);
     int   (*is_dir)(void *node);
+    int   (*file_size)(void *node);   // Get file size in bytes
     void *(*create)(const char *path);
     void *(*mkdir)(const char *path);
     int   (*delete)(const char *path);
@@ -106,6 +107,11 @@ typedef struct kapi {
     // Power management / timing
     void (*wfi)(void);                   // Wait for interrupt (low power sleep)
     void (*sleep_ms)(uint32_t ms);       // Sleep for at least ms milliseconds
+
+    // Sound
+    int (*sound_play_wav)(const void *data, uint32_t size);  // Play WAV from memory
+    void (*sound_stop)(void);                                 // Stop playback
+    int (*sound_is_playing)(void);                           // Check if playing
 } kapi_t;
 
 // Window event types
