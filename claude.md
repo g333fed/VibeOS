@@ -669,6 +669,18 @@ hdiutil detach /Volumes/VIBEOS # Unmount before running QEMU
   - For now, just moved stack way up and documented the layout
 - **Achievement**: Floating point works! Calculator does decimals! Processes exit cleanly!
 
+- **Enabled -O3 optimization!**
+  - Changed CFLAGS and USER_CFLAGS from -O0 to -O3
+  - Everything works except kernel's `fat32_delete_recursive()` which breaks with -O3
+  - Solution: Moved recursive delete logic to userspace (rm.c and files.c)
+  - Kernel only needs to delete single files and empty directories
+  - Userspace iterates with `readdir()` and deletes children before parent
+- **Userspace recursive delete:**
+  - `rm -r` now implements recursion in userspace
+  - Files app delete action uses same userspace implementation
+  - Works correctly with -O3 optimization
+- **Achievement**: Full -O3 optimization across kernel and userspace!
+
 **NEXT SESSION TODO:**
 - Port minimp3 decoder (now possible with floats!)
 - Build music player UI

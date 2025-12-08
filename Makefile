@@ -41,15 +41,15 @@ KERNEL_BIN = $(BUILD_DIR)/vibeos.bin
 DISK_IMG = disk.img
 DISK_SIZE = 64
 
-# Compiler flags - use -O0 everywhere to avoid optimization issues
+# Compiler flags - YOLO -O3
 # Floating point enabled (no -mgeneral-regs-only)
 # Use -mstrict-align to avoid unaligned SIMD accesses
-CFLAGS = -ffreestanding -nostdlib -nostartfiles -mcpu=cortex-a72 -mstrict-align -Wall -Wextra -O0 -I$(KERNEL_DIR)
+CFLAGS = -ffreestanding -nostdlib -nostartfiles -mcpu=cortex-a72 -mstrict-align -Wall -Wextra -O3 -I$(KERNEL_DIR)
 ASFLAGS = -mcpu=cortex-a72
 LDFLAGS = -nostdlib -T linker.ld
 
-# Userspace compiler flags (PIE for position-independent loading)
-USER_CFLAGS = -ffreestanding -nostdlib -nostartfiles -mcpu=cortex-a72 -mstrict-align -fPIE -Wall -Wextra -O0 -I$(USER_DIR)/lib
+# Userspace compiler flags (PIE for position-independent loading) - YOLO -O3
+USER_CFLAGS = -ffreestanding -nostdlib -nostartfiles -mcpu=cortex-a72 -mstrict-align -fPIE -Wall -Wextra -O3 -I$(USER_DIR)/lib
 USER_LDFLAGS = -nostdlib -pie -T user/linker.ld
 
 # QEMU settings

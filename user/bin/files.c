@@ -155,6 +155,74 @@ static void draw_file_icon(int x, int y, uint32_t bg) {
     }
 }
 
+// ============ Recursive Delete (userspace implementation) ============
+
+static int delete_recursive(const char *path) {
+    // First try deleting as a file
+    if (api->delete(path) == 0) {
+        return 0;
+    }
+
+    // Try deleting as an empty directory
+    if (api->delete_dir(path) == 0) {
+        return 0;
+    }
+
+    // If that failed, it might be a non-empty directory
+    // Open directory and iterate
+    void *dir = api->open(path);
+    if (!dir) {
+        return -1;
+    }
+
+    char name[256];
+    uint8_t type;
+    char child_path[512];
+    int idx = 0;
+
+    // Collect all names first, then delete
+    // (Can't delete while iterating - shifts indices)
+    char all_names[4096];
+    int name_offsets[128];
+    int name_count = 0;
+    int buf_pos = 0;
+
+    while (api->readdir(dir, idx, name, sizeof(name), &type) == 0) {
+        idx++;
+
+        // Skip . and ..
+        if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
+            continue;
+        }
+
+        // Store name
+        if (name_count < 128 && buf_pos + (int)strlen(name) + 1 < 4096) {
+            name_offsets[name_count++] = buf_pos;
+            strcpy(all_names + buf_pos, name);
+            buf_pos += strlen(name) + 1;
+        }
+    }
+
+    // Now delete all collected entries
+    for (int i = 0; i < name_count; i++) {
+        // Build child path
+        strcpy(child_path, path);
+        int plen = strlen(child_path);
+        if (plen > 0 && child_path[plen - 1] != '/') {
+            child_path[plen] = '/';
+            child_path[plen + 1] = '\0';
+        }
+        int clen = strlen(child_path);
+        strcpy(child_path + clen, all_names + name_offsets[i]);
+
+        // Recursively delete child
+        delete_recursive(child_path);
+    }
+
+    // Now directory should be empty, delete it as directory
+    return api->delete_dir(path);
+}
+
 // ============ File Operations ============
 
 static void refresh_directory(void) {
@@ -315,8 +383,8 @@ static void action_delete(void) {
     char path[256];
     build_item_path(selected_idx, path, sizeof(path));
 
-    // Use recursive delete - works for both files and directories
-    api->delete_recursive(path);
+    // Use userspace recursive delete - works for both files and directories
+    delete_recursive(path);
 
     refresh_directory();
 }
