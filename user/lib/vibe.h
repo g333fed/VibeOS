@@ -90,6 +90,9 @@ typedef struct kapi {
     void (*stdio_puts)(const char *s);   // Write a string
     int  (*stdio_getc)(void);            // Read a character (-1 if none)
     int  (*stdio_has_key)(void);         // Check if input available
+
+    // System info
+    unsigned long (*get_uptime_ticks)(void);  // Get timer tick count (100 ticks/sec)
 } kapi_t;
 
 // Window event types

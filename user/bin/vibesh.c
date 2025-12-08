@@ -208,8 +208,7 @@ static int read_line(void) {
         int c = sh_getc();
 
         if (c < 0) {
-            // No input, yield to other processes
-            k->yield();
+            // No input - preemptive scheduler handles context switches
             continue;
         }
 

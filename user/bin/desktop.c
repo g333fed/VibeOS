@@ -1002,8 +1002,7 @@ int main(kapi_t *kapi, int argc, char **argv) {
         mouse_prev_y = mouse_y;
         mouse_prev_buttons = mouse_buttons;
 
-        // Yield to other processes
-        api->yield();
+        // Preemptive scheduling handles context switches now
     }
 
     // Cleanup

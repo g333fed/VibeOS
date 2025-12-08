@@ -365,3 +365,16 @@ int process_exec(const char *path) {
     char *argv[1] = { (char *)path };
     return process_exec_args(path, 1, argv);
 }
+
+// Called from IRQ handler for preemptive scheduling
+// This runs after all registers are saved on the IRQ stack
+void process_schedule_from_irq(void) {
+    // Only reschedule if we have multiple processes
+    int ready_count = process_count_ready();
+    if (ready_count <= 1) {
+        return;  // No point switching
+    }
+
+    // Call the normal scheduler
+    process_schedule();
+}

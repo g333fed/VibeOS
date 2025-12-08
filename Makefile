@@ -55,9 +55,10 @@ USER_LDFLAGS = -nostdlib -pie -T user/linker.ld
 QEMU = qemu-system-aarch64
 # Graphical mode with virtio-keyboard, virtio-tablet (mouse), and virtio-blk disk
 # Use force-legacy=false to get modern virtio (version 2) which is easier to program
-QEMU_FLAGS = -M virt -cpu cortex-a72 -m 256M -global virtio-mmio.force-legacy=false -device ramfb -device virtio-blk-device,drive=hd0 -drive file=$(DISK_IMG),if=none,format=raw,id=hd0 -device virtio-keyboard-device -device virtio-tablet-device -serial stdio -kernel $(KERNEL_BIN)
+# Use secure=on and -bios to boot at EL3 with full GIC access
+QEMU_FLAGS = -M virt,secure=on -cpu cortex-a72 -m 256M -global virtio-mmio.force-legacy=false -device ramfb -device virtio-blk-device,drive=hd0 -drive file=$(DISK_IMG),if=none,format=raw,id=hd0 -device virtio-keyboard-device -device virtio-tablet-device -serial stdio -bios $(KERNEL_BIN)
 # No-graphics mode (terminal only) - no keyboard in nographic mode
-QEMU_FLAGS_NOGRAPHIC = -M virt -cpu cortex-a72 -m 256M -global virtio-mmio.force-legacy=false -device virtio-blk-device,drive=hd0 -drive file=$(DISK_IMG),if=none,format=raw,id=hd0 -nographic -kernel $(KERNEL_BIN)
+QEMU_FLAGS_NOGRAPHIC = -M virt,secure=on -cpu cortex-a72 -m 256M -global virtio-mmio.force-legacy=false -device virtio-blk-device,drive=hd0 -drive file=$(DISK_IMG),if=none,format=raw,id=hd0 -nographic -bios $(KERNEL_BIN)
 
 .PHONY: all clean run run-nographic debug user disk install-user
 

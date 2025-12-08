@@ -7,9 +7,6 @@
 
 #include "memory.h"
 
-// Defined in linker script - end of kernel
-extern uint64_t _bss_end;
-
 uint64_t heap_start;
 uint64_t heap_end;
 
@@ -25,12 +22,16 @@ typedef struct block_header {
 
 static block_header_t *free_list = NULL;
 
+// Defined in linker script - end of BSS in RAM
+extern uint64_t _bss_end;
+
 // Programs load at 0x41000000+, so heap must end before that
 #define PROGRAM_LOAD_AREA 0x41000000
 
 void memory_init(void) {
-    // Heap starts after BSS, aligned to 16 bytes
-    heap_start = ALIGN_UP((uint64_t)&_bss_end + 0x10000, 16);  // +64KB buffer after stack
+    // Heap starts after BSS (in RAM), aligned to 16 bytes
+    // Add 64KB buffer for stack safety
+    heap_start = ALIGN_UP((uint64_t)&_bss_end + 0x10000, 16);
     // Heap ends BEFORE the program load area to avoid overlap
     heap_end = PROGRAM_LOAD_AREA;
 

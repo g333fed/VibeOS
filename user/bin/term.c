@@ -267,9 +267,6 @@ int main(kapi_t *kapi, int argc, char **argv) {
                 input_push(c);
             }
         }
-
-        // Yield to let shell process
-        api->yield();
     }
 
     // Clean up stdio hooks

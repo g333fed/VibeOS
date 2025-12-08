@@ -10,6 +10,7 @@
 #include "process.h"
 #include "fb.h"
 #include "mouse.h"
+#include "irq.h"
 
 // Global kernel API instance
 kapi_t kapi;

@@ -482,21 +482,28 @@ static fat32_dirent_t *resolve_path(const char *path, uint32_t *out_cluster) {
     while ((component = strtok_r(rest, "/", &rest)) != NULL) {
         if (component[0] == '\0') continue;
 
+       // printf("[FAT32] resolve: looking for '%s' in cluster %u\n", component, current_cluster);
         entry = find_entry_in_dir(current_cluster, component, NULL, NULL);
         if (!entry) {
+            printf("[FAT32] resolve: '%s' not found!\n", component);
             return NULL;  // Not found
         }
+      //  printf("[FAT32] resolve: found '%s'\n", component);
 
         // Get cluster of this entry
         current_cluster = ((uint32_t)entry->cluster_hi << 16) | entry->cluster_lo;
+       // printf("[FAT32] resolve: entry=%p attr=0x%x rest='%s'\n", entry, entry->attr, rest ? rest : "(null)");
 
         // If there's more path to go, this must be a directory
-        if (*rest && !(entry->attr & FAT_ATTR_DIRECTORY)) {
+        if (rest && *rest && !(entry->attr & FAT_ATTR_DIRECTORY)) {
+        //    printf("[FAT32] resolve: not a dir but path continues, abort\n");
             return NULL;  // Trying to traverse through a file
         }
     }
 
+   // printf("[FAT32] resolve: loop done, entry=%p\n", entry);
     if (out_cluster) *out_cluster = current_cluster;
+   // printf("[FAT32] resolve: returning entry=%p\n", entry);
     return entry;
 }
 
@@ -551,12 +558,20 @@ int fat32_file_size(const char *path) {
 }
 
 int fat32_is_dir(const char *path) {
-    if (!fs_initialized) return -1;
+    if (!fs_initialized) {
+        printf("[FAT32] is_dir(%s): not initialized\n", path);
+        return -1;
+    }
 
     fat32_dirent_t *entry = resolve_path(path, NULL);
-    if (!entry) return -1;
+    if (!entry) {
+        printf("[FAT32] is_dir(%s): not found\n", path);
+        return -1;
+    }
 
-    return (entry->attr & FAT_ATTR_DIRECTORY) ? 1 : 0;
+    int result = (entry->attr & FAT_ATTR_DIRECTORY) ? 1 : 0;
+    printf("[FAT32] is_dir(%s): %d\n", path, result);
+    return result;
 }
 
 int fat32_list_dir(const char *path, fat32_dir_callback callback, void *user_data) {

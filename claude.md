@@ -14,7 +14,7 @@ VibeOS is a hobby operating system built from scratch for aarch64 (ARM64), targe
 - **Human**: Vibes only. Yells "fuck yeah" when things work. Cannot provide technical guidance.
 - **Claude**: Full technical lead. Makes all architecture decisions. Wozniak energy.
 
-## Current State (Last Updated: Session 16)
+## Current State (Last Updated: Session 17)
 - [x] Bootloader (boot/boot.S) - Sets up stack, clears BSS, jumps to kernel
 - [x] Minimal kernel (kernel/kernel.c) - UART output working
 - [x] Linker script (linker.ld) - Memory layout for QEMU virt
@@ -38,7 +38,7 @@ VibeOS is a hobby operating system built from scratch for aarch64 (ARM64), targe
 - [x] Virtio block device (kernel/virtio_blk.c) - Read/write disk sectors
 - [x] FAT32 filesystem (kernel/fat32.c) - Read/write, supports long filenames
 - [x] Persistent storage - 64MB FAT32 disk image, mountable on macOS
-- [ ] Interrupts - GIC/timer code exists but disabled (breaks virtio - unknown bug)
+- [x] Interrupts - GIC-400 working! Keyboard via IRQ, boots at EL3 (Secure)
 
 ## Architecture Decisions Made
 1. **Target**: QEMU virt machine, aarch64, Cortex-A72
@@ -91,7 +91,7 @@ Phase 4: GUI (IN PROGRESS)
 - 0x41000000+: Program load area (dynamically allocated by kernel)
 
 ### Key Files
-- boot/boot.S - Entry point, CPU init, BSS clear
+- boot/boot.S - Entry point, EL3→EL1 transition, BSS clear, .data copy
 - kernel/kernel.c - Main kernel code
 - kernel/memory.c/.h - Heap allocator (malloc/free)
 - kernel/string.c/.h - String/memory functions
@@ -99,7 +99,9 @@ Phase 4: GUI (IN PROGRESS)
 - kernel/fb.c/.h - Framebuffer driver (ramfb)
 - kernel/console.c/.h - Text console (with UART fallback)
 - kernel/font.c/.h - Bitmap font
-- kernel/keyboard.c/.h - Virtio keyboard driver
+- kernel/keyboard.c/.h - Virtio keyboard driver (interrupt-driven)
+- kernel/irq.c/.h - GIC-400 interrupt controller driver
+- kernel/vectors.S - Exception vector table
 - kernel/virtio_blk.c/.h - Virtio block device driver
 - kernel/fat32.c/.h - FAT32 filesystem driver (read/write)
 - kernel/shell.c/.h - In-kernel shell with all commands
@@ -110,7 +112,7 @@ Phase 4: GUI (IN PROGRESS)
 - kernel/context.S - Assembly context switch routine
 - kernel/kapi.c/.h - Kernel API for programs
 - kernel/initramfs.c/.h - Binary embedding (currently unused)
-- linker.ld - Memory layout
+- linker.ld - Memory layout (flash + RAM regions)
 - Makefile - Build system
 - disk.img - FAT32 disk image (created by `make disk`)
 
@@ -178,7 +180,7 @@ hdiutil detach /Volumes/VIBEOS # Unmount before running QEMU
 | Shell | POSIX-ish | Familiar syntax, basic redirects |
 | RAM | 256MB | Configurable |
 | Disk | 64MB FAT32 | Persistent storage via virtio-blk |
-| Interrupts | Disabled | Polling works, interrupts break virtio (bug) |
+| Interrupts | GIC-400 | Keyboard via IRQ, boots at EL3 for full GIC access |
 
 ## Gotchas / Lessons Learned
 - **aarch64 va_list**: Can't pass va_list to helper functions easily. Inline the va_arg handling.
@@ -187,7 +189,7 @@ hdiutil detach /Volumes/VIBEOS # Unmount before running QEMU
 - **Virtio memory barriers**: ARM needs `dsb sy` barriers around device register access.
 - **strncpy hangs**: Our strncpy implementation causes hangs in some cases. Use manual loops instead.
 - **Static array memset**: Don't memset large static arrays - they're already zero-initialized.
-- **Interrupts + Virtio**: Enabling GIC interrupts breaks virtio keyboard polling. Unknown root cause. Skipped for now - cooperative multitasking doesn't need interrupts anyway.
+- **GIC Security Groups**: GIC interrupts require matching security configuration. If running in Secure EL1, use Group 0 interrupts. Group 1 interrupts in Secure state return IRQ 1022 (spurious). Boot with `-bios` and `secure=on` to start at EL3 with full GIC register access.
 - **-mgeneral-regs-only**: Use this flag to prevent GCC from using SIMD registers.
 - **Stack in BSS**: Boot hangs if stack is in .bss section - it gets zeroed while in use! Put stack in separate .stack section.
 - **Embedded binaries**: objcopy binary embedding breaks with 6+ programs. Linker issue. Just use monolith kernel instead.
@@ -201,6 +203,9 @@ hdiutil detach /Volumes/VIBEOS # Unmount before running QEMU
 - **PIE on AArch64**: Use `-fPIE` and `-pie` flags. ELF loader processes R_AARCH64_RELATIVE relocations at load time.
 - **Context switch**: Only need to save callee-saved registers (x19-x30, sp). Caller-saved regs are already on stack.
 - **PIE relocations (FIXED!)**: Use `-O0` for userspace to ensure GCC generates relocations for static pointer initializers. With `-O2`, GCC tries to be clever and compute addresses at runtime, but puts structs in BSS (zeroed) so pointers are NULL. The ELF loader now processes `.rela.dyn` section and fixes up `R_AARCH64_RELATIVE` entries. Normal C code with pointers now works!
+- **strtok_r NULL rest**: After the last token, `strtok_r` sets `rest` to NULL (not empty string). Always check `rest && *rest` before dereferencing.
+- **Flash/RAM linker split**: When booting via `-bios`, code lives in flash (0x0) but data/BSS must be in RAM (0x40000000). Use separate MEMORY regions in linker script with `AT>` for load addresses. Copy .data from flash to RAM at boot.
+- **EL3→EL1 direct**: Can skip EL2 entirely. Set `SCR_EL3` with NS=0 (stay Secure), RW=1 (AArch64), then eret to EL1.
 
 ## Session Log
 ### Session 1
@@ -429,7 +434,30 @@ hdiutil detach /Volumes/VIBEOS # Unmount before running QEMU
   - Works in both kernel console AND terminal window
 - **Achievement**: Shell running inside a GUI window! Can run commands, see output, everything works!
 
+### Session 17
+- **INTERRUPTS FINALLY WORKING!**
+  - Root cause found: GIC security groups. Running in Non-Secure EL1 but trying to configure Group 0 registers was a no-op.
+  - Solution: Boot at EL3 (Secure) using `-bios` instead of `-kernel`, stay in Secure world
+  - Changed QEMU flags: `-M virt,secure=on -bios vibeos.bin`
+  - Updated linker script: code at 0x0 (flash), data/BSS in RAM (0x40000000)
+  - Updated boot.S: EL3→EL1 transition (skip EL2), copy .data from flash to RAM
+  - GIC configured for Group 0 (Secure) interrupts
+- **New files:**
+  - `kernel/irq.c` / `kernel/irq.h` - GIC-400 driver, timer support
+  - `kernel/vectors.S` - Exception vector table for AArch64
+- **Keyboard now interrupt-driven:**
+  - Registered IRQ handler for virtio keyboard (IRQ 78)
+  - No more polling needed for keyboard input
+- **Fixed FAT32 bug:**
+  - `resolve_path()` was dereferencing NULL `rest` pointer from `strtok_r`
+  - Added NULL check: `if (rest && *rest && ...)`
+- **Timer ready but disabled:**
+  - Timer IRQ handler exists, can enable preemptive multitasking later
+  - Currently disabled to keep cooperative model stable
+- **Achievement**: Full interrupt support! GIC mystery finally solved after Sessions 2-3 failures!
+
 **NEXT SESSION TODO:**
+- Enable timer for preemptive multitasking
 - Build notepad/GUI text editor
 - Build file explorer as windowed app
 - Maybe DOOM?

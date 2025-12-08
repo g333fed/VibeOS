@@ -327,8 +327,6 @@ int main(kapi_t *kapi, int argc, char **argv) {
                 }
             }
         }
-
-        api->yield();
     }
 
     api->window_destroy(window_id);

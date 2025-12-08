@@ -103,9 +103,12 @@ static int kbd_device_index = -1;  // Which virtio device slot (for IRQ calculat
 
 // Key buffer
 #define KEY_BUF_SIZE 32
-static char key_buffer[KEY_BUF_SIZE];
-static int key_buf_read = 0;
-static int key_buf_write = 0;
+static volatile char key_buffer[KEY_BUF_SIZE];
+static volatile int key_buf_read = 0;
+static volatile int key_buf_write = 0;
+
+// Are we using interrupt-driven mode?
+static int irq_mode = 0;
 
 // Legacy virtio queue layout requires specific alignment and contiguous layout
 // For queue size N:
@@ -484,6 +487,11 @@ uint32_t keyboard_get_irq(void) {
 }
 
 // IRQ handler - called from irq.c
+static int irq_count = 0;
 void keyboard_irq_handler(void) {
+    irq_count++;
+    if (irq_count <= 5) {
+        printf("[KBD] IRQ! (count=%d)\n", irq_count);
+    }
     process_events();
 }

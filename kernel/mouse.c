@@ -135,8 +135,6 @@ static inline void write32(volatile uint32_t *addr, uint32_t val) {
 
 // Find virtio-tablet device (mouse with absolute positioning)
 static volatile uint32_t *find_virtio_tablet(void) {
-    printf("[MOUSE] Scanning for virtio tablet...\n");
-
     for (int i = 0; i < 32; i++) {
         volatile uint32_t *base = (volatile uint32_t *)(uintptr_t)(VIRTIO_MMIO_BASE + i * VIRTIO_MMIO_STRIDE);
         volatile uint8_t *base8 = (volatile uint8_t *)(uintptr_t)(VIRTIO_MMIO_BASE + i * VIRTIO_MMIO_STRIDE);
@@ -148,7 +146,7 @@ static volatile uint32_t *find_virtio_tablet(void) {
             continue;
         }
 
-        // Check device name
+        // Check device name for "Tablet"
         base8[VIRTIO_INPUT_CFG_SELECT] = VIRTIO_INPUT_CFG_ID_NAME;
         base8[VIRTIO_INPUT_CFG_SUBSEL] = 0;
         mb();
@@ -159,14 +157,12 @@ static volatile uint32_t *find_virtio_tablet(void) {
             name[j] = base8[VIRTIO_INPUT_CFG_DATA + j];
         }
 
-        // Look for "tablet" in name (QEMU Virtio Tablet)
+        // Look for "Tablet" in name
         if (name[0] == 'Q' && name[5] == 'V' && name[12] == 'T') {
-            printf("[MOUSE] Found tablet: %s (device %d)\n", name, i);
             return base;
         }
     }
 
-    printf("[MOUSE] No virtio tablet found\n");
     return NULL;
 }
 

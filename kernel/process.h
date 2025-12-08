@@ -75,6 +75,7 @@ process_t *process_get(int pid);
 // Scheduling
 void process_yield(void);              // Give up CPU voluntarily
 void process_schedule(void);           // Pick next process to run
+void process_schedule_from_irq(void);  // Called from timer IRQ for preemption
 int process_count_ready(void);         // Count runnable processes
 
 // Context switch (implemented in assembly)

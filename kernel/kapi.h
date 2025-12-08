@@ -94,6 +94,9 @@ typedef struct {
     int  (*stdio_getc)(void);            // Read a character (-1 if none)
     int  (*stdio_has_key)(void);         // Check if input available
 
+    // System info
+    uint64_t (*get_uptime_ticks)(void);  // Get timer tick count (100 ticks/sec)
+
 } kapi_t;
 
 // Window event types

@@ -18,6 +18,7 @@
 #include "kapi.h"
 #include "virtio_blk.h"
 #include "mouse.h"
+#include "irq.h"
 
 // QEMU virt machine PL011 UART base address
 #define UART0_BASE 0x09000000
@@ -135,8 +136,23 @@ void kernel_main(void) {
         console_puts("\n");
     }
 
-    // Initialize keyboard (polling mode)
+    // Initialize interrupt controller (GIC)
+    irq_init();
+
+    // Initialize timer (10ms tick for now)
+    // DISABLED FOR DEBUGGING - timer may be breaking things
+    // timer_init(10);
+
+    // Initialize keyboard
     keyboard_init();
+
+    // Register keyboard IRQ handler
+    uint32_t kbd_irq = keyboard_get_irq();
+    if (kbd_irq > 0) {
+        irq_register_handler(kbd_irq, keyboard_irq_handler);
+        irq_enable_irq(kbd_irq);
+        printf("[KERNEL] Keyboard IRQ %d registered\n", kbd_irq);
+    }
 
     // Initialize mouse (for GUI)
     mouse_init();
@@ -156,6 +172,11 @@ void kernel_main(void) {
 
     // Load embedded binaries into VFS
     initramfs_init();
+
+    // Enable interrupts now that everything is initialized
+    printf("[KERNEL] Enabling interrupts...\n");
+    irq_enable();
+    printf("[KERNEL] Interrupts enabled!\n");
 
     printf("\n");
     printf("[KERNEL] Starting shell...\n");

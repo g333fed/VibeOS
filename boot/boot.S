@@ -38,14 +38,69 @@ primary_cpu:
     mov     w2, #'\n'
     str     w2, [x1]
 
+    cmp     x0, #3
+    b.eq    drop_from_el3
     cmp     x0, #2
-    b.eq    drop_to_el1
+    b.eq    drop_from_el2
     cmp     x0, #1
     b.eq    at_el1
-    // If EL3, we'd need more setup - just hang for now
+    // Unknown EL, hang
     b       secondary_cpu
 
-drop_to_el1:
+drop_from_el3:
+    // Debug: print '3'
+    mov     x1, #0x09000000
+    mov     w2, #'3'
+    str     w2, [x1]
+
+    // We're at EL3 (Secure) - drop DIRECTLY to EL1 (skip EL2)
+    // Stay in Secure world so we have full GIC access
+
+    // Configure SCR_EL3 (Secure Configuration Register)
+    // Bit 10 (RW): Lower ELs are AArch64
+    // Bit 0 (NS): Non-secure bit (0 = SECURE)
+    // Don't set HCE since we're skipping EL2
+    mov     x0, #0x430          // RW=1, NS=0 (secure), no HCE
+    msr     scr_el3, x0
+    isb
+
+    mov     w2, #'a'
+    str     w2, [x1]
+
+    // Initialize SCTLR_EL1 to safe defaults (caches off, MMU off)
+    mrs     x0, sctlr_el1
+    bic     x0, x0, #(1 << 0)   // Clear M bit (MMU off)
+    bic     x0, x0, #(1 << 2)   // Clear C bit (data cache off)
+    bic     x0, x0, #(1 << 12)  // Clear I bit (instruction cache off)
+    msr     sctlr_el1, x0
+    isb
+
+    mov     w2, #'b'
+    str     w2, [x1]
+
+    // Set up SPSR for EL1h (EL1 with SP_EL1, all exceptions masked)
+    mov     x0, #0x3c5          // DAIF masked, EL1h
+    msr     spsr_el3, x0
+
+    mov     w2, #'c'
+    str     w2, [x1]
+
+    // Set return address to at_el1
+    adr     x0, at_el1
+    msr     elr_el3, x0
+
+    mov     w2, #'d'
+    str     w2, [x1]
+
+    // Return directly to EL1
+    eret
+
+drop_from_el2:
+    // Debug: print '2'
+    mov     x1, #0x09000000
+    mov     w2, #'2'
+    str     w2, [x1]
+
     // We're at EL2, need to drop to EL1
 
     // Enable AArch64 for EL1
@@ -59,6 +114,9 @@ drop_to_el1:
     // Set return address to at_el1
     adr     x0, at_el1
     msr     elr_el2, x0
+
+    mov     w2, #'\n'
+    str     w2, [x1]
 
     // Return to EL1
     eret
@@ -76,14 +134,31 @@ at_el1:
     str     w10, [x9]
 
     // Set up the stack pointer (stack grows downward)
+    // Stack is at end of first 64KB of RAM
     mov     w10, #'S'
     str     w10, [x9]
-    ldr     x0, =_stack_top
+    mov     x0, #0x40010000       // Stack top in RAM
     mov     sp, x0
     mov     w10, #'s'
     str     w10, [x9]
 
-    // Clear BSS section
+    // Copy .data section from flash (LMA) to RAM (VMA)
+    mov     w10, #'D'
+    str     w10, [x9]
+    ldr     x0, =_data_load       // Source (in flash)
+    ldr     x1, =_data_start      // Dest (in RAM)
+    ldr     x2, =_data_end        // End of dest
+copy_data:
+    cmp     x1, x2
+    b.ge    data_done
+    ldr     x3, [x0], #8
+    str     x3, [x1], #8
+    b       copy_data
+data_done:
+    mov     w10, #'d'
+    str     w10, [x9]
+
+    // Clear BSS section (in RAM)
     mov     w10, #'B'
     str     w10, [x9]
     ldr     x0, =_bss_start
@@ -95,6 +170,15 @@ clear_bss:
     b       clear_bss
 bss_done:
     mov     w10, #'b'
+    str     w10, [x9]
+
+    // Install exception vector table
+    mov     w10, #'V'
+    str     w10, [x9]
+    ldr     x0, =exception_vectors
+    msr     vbar_el1, x0
+    isb
+    mov     w10, #'v'
     str     w10, [x9]
 
     // Jump to kernel main

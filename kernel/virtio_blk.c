@@ -147,81 +147,54 @@ static volatile uint32_t *find_virtio_blk(void) {
 }
 
 int virtio_blk_init(void) {
-    printf("[BLK] Initializing virtio-blk...\n");
-
     blk_base = find_virtio_blk();
     if (!blk_base) {
-        printf("[BLK] No virtio-blk device found\n");
+        printf("[BLK] No device found\n");
         return -1;
     }
-
-    printf("[BLK] Found virtio-blk at %p\n", blk_base);
-
-    // Check virtio version
-    uint32_t version = read32(blk_base + VIRTIO_MMIO_VERSION/4);
-    printf("[BLK] Virtio version: %d\n", version);
 
     // Reset device
     write32(blk_base + VIRTIO_MMIO_STATUS/4, 0);
     while (read32(blk_base + VIRTIO_MMIO_STATUS/4) != 0) {
         asm volatile("nop");
     }
-    printf("[BLK] Device reset complete\n");
 
-    // Acknowledge
+    // Acknowledge and set driver
     write32(blk_base + VIRTIO_MMIO_STATUS/4, VIRTIO_STATUS_ACK);
-
-    // Driver loaded
     write32(blk_base + VIRTIO_MMIO_STATUS/4, VIRTIO_STATUS_ACK | VIRTIO_STATUS_DRIVER);
 
-    // Read device features (page 0)
+    // Accept no special features
     write32(blk_base + VIRTIO_MMIO_DEVICE_FEATURES_SEL/4, 0);
-    uint32_t dev_features = read32(blk_base + VIRTIO_MMIO_DEVICE_FEATURES/4);
-    printf("[BLK] Device features: 0x%x\n", dev_features);
-
-    // Accept no special features for now
     write32(blk_base + VIRTIO_MMIO_DRIVER_FEATURES_SEL/4, 0);
     write32(blk_base + VIRTIO_MMIO_DRIVER_FEATURES/4, 0);
-
-    // Features OK
     write32(blk_base + VIRTIO_MMIO_STATUS/4,
             VIRTIO_STATUS_ACK | VIRTIO_STATUS_DRIVER | VIRTIO_STATUS_FEATURES_OK);
 
-    // Check features were accepted
     uint32_t status = read32(blk_base + VIRTIO_MMIO_STATUS/4);
     if (!(status & VIRTIO_STATUS_FEATURES_OK)) {
-        printf("[BLK] Device did not accept features\n");
+        printf("[BLK] Feature negotiation failed\n");
         return -1;
     }
 
-    // Read device capacity from config space
+    // Read device capacity
     volatile uint8_t *config = (volatile uint8_t *)blk_base + VIRTIO_MMIO_CONFIG;
     device_capacity = *(volatile uint64_t *)config;
-    printf("[BLK] Device capacity: %d sectors (%d MB)\n",
-           (uint32_t)device_capacity, (uint32_t)(device_capacity / 2048));
 
-    // Setup virtqueue 0 (requestq)
+    // Setup virtqueue 0
     write32(blk_base + VIRTIO_MMIO_QUEUE_SEL/4, 0);
-
     uint32_t max_queue = read32(blk_base + VIRTIO_MMIO_QUEUE_NUM_MAX/4);
-    printf("[BLK] Max queue size: %d\n", max_queue);
-
     if (max_queue < QUEUE_SIZE) {
         printf("[BLK] Queue too small\n");
         return -1;
     }
 
-    // Set queue size
     write32(blk_base + VIRTIO_MMIO_QUEUE_NUM/4, QUEUE_SIZE);
 
-    // Setup queue memory layout
+    // Setup queue memory
     desc = (virtq_desc_t *)queue_mem;
     avail = (virtq_avail_t *)(queue_mem + QUEUE_SIZE * sizeof(virtq_desc_t));
     used = (virtq_used_t *)(queue_mem + 2048);
 
-    printf("[BLK] desc=%p avail=%p used=%p\n", desc, avail, used);
-
-    // Set queue addresses (modern virtio)
     uint64_t desc_addr = (uint64_t)desc;
     uint64_t avail_addr = (uint64_t)avail;
     uint64_t used_addr = (uint64_t)used;
@@ -233,26 +206,20 @@ int virtio_blk_init(void) {
     write32(blk_base + VIRTIO_MMIO_QUEUE_USED_LOW/4, (uint32_t)used_addr);
     write32(blk_base + VIRTIO_MMIO_QUEUE_USED_HIGH/4, (uint32_t)(used_addr >> 32));
 
-    // Initialize avail ring
     avail->flags = 0;
     avail->idx = 0;
 
-    // Queue ready
     write32(blk_base + VIRTIO_MMIO_QUEUE_READY/4, 1);
-
-    // Driver OK
     write32(blk_base + VIRTIO_MMIO_STATUS/4,
             VIRTIO_STATUS_ACK | VIRTIO_STATUS_DRIVER | VIRTIO_STATUS_FEATURES_OK | VIRTIO_STATUS_DRIVER_OK);
 
     status = read32(blk_base + VIRTIO_MMIO_STATUS/4);
-    printf("[BLK] Final status: 0x%x\n", status);
-
     if (status & 0x40) {
-        printf("[BLK] ERROR: Device reported failure!\n");
+        printf("[BLK] Device failure\n");
         return -1;
     }
 
-    printf("[BLK] Virtio-blk initialized!\n");
+    printf("[BLK] Ready (%d MB)\n", (uint32_t)(device_capacity / 2048));
     return 0;
 }
 

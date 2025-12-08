@@ -294,7 +294,6 @@ static int wait_for_restart(void) {
             }
         }
         delay(10000);
-        api->yield();
     }
 }
 
