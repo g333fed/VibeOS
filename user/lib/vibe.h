@@ -131,6 +131,12 @@ typedef struct kapi {
 
     // RAM info
     size_t (*get_ram_total)(void);                           // Total RAM in bytes
+
+    // Networking
+    int (*net_ping)(uint32_t ip, uint16_t seq, uint32_t timeout_ms);  // Ping an IP, returns 0 on success
+    void (*net_poll)(void);                                           // Process incoming packets
+    uint32_t (*net_get_ip)(void);                                     // Get our IP address
+    void (*net_get_mac)(uint8_t *mac);                               // Get our MAC address (6 bytes)
 } kapi_t;
 
 // Window event types
@@ -173,6 +179,9 @@ typedef struct kapi {
 #ifndef NULL
 #define NULL ((void *)0)
 #endif
+
+// Network helper: make IP address from bytes
+#define MAKE_IP(a,b,c,d) (((uint32_t)(a)<<24)|((uint32_t)(b)<<16)|((uint32_t)(c)<<8)|(uint32_t)(d))
 
 // ============ String Functions ============
 

@@ -132,6 +132,12 @@ typedef struct {
     // RAM info
     size_t (*get_ram_total)(void);                           // Total RAM in bytes
 
+    // Networking
+    int (*net_ping)(uint32_t ip, uint16_t seq, uint32_t timeout_ms);  // Ping an IP, returns 0 on success
+    void (*net_poll)(void);                                           // Process incoming packets
+    uint32_t (*net_get_ip)(void);                                     // Get our IP address
+    void (*net_get_mac)(uint8_t *mac);                               // Get our MAC address (6 bytes)
+
 } kapi_t;
 
 // Window event types

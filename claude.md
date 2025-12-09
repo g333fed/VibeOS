@@ -19,7 +19,7 @@ VibeOS is a hobby operating system built from scratch for aarch64 (ARM64), targe
 - **Human**: Vibes only. Yells "fuck yeah" when things work. Cannot provide technical guidance.
 - **Claude**: Full technical lead. Makes all architecture decisions. Wozniak energy.
 
-## Current State (Last Updated: Session 28)
+## Current State (Last Updated: Session 30)
 - [x] Bootloader (boot/boot.S) - Sets up stack, clears BSS, jumps to kernel
 - [x] Minimal kernel (kernel/kernel.c) - UART output working
 - [x] Linker script (linker.ld) - Memory layout for QEMU virt
@@ -56,6 +56,8 @@ VibeOS is a hobby operating system built from scratch for aarch64 (ARM64), targe
 - [x] Virtio Sound - Audio playback via virtio-sound device, WAV and MP3 support
 - [x] Music Player - GUI music player with album/track browser, pause/resume, progress bar
 - [x] Floating point - FPU enabled, context switch saves/restores FP regs, calc uses doubles
+- [x] Networking - virtio-net driver, Ethernet, ARP, IP, ICMP working!
+- [x] Ping command - `/bin/ping` can ping internet hosts (1.1.1.1, etc.)
 
 ## Architecture Decisions Made
 1. **Target**: QEMU virt machine, aarch64, Cortex-A72
@@ -826,6 +828,46 @@ hdiutil detach /Volumes/VIBEOS # Unmount before running QEMU
   - KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_HOME, KEY_END, KEY_DELETE
 - **Achievement**: Proper terminal with scrollback and readline-style shell!
 
+### Session 30
+- **NETWORKING - VibeOS is on the internet!**
+- **Virtio-net driver (`kernel/virtio_net.c`):**
+  - Device ID 1, virtqueues: 0=receiveq, 1=transmitq
+  - Reads MAC address from config space
+  - Pre-populates RX buffers for async receive
+  - Interrupt-driven packet notification (IRQ handler just acks, doesn't consume)
+- **Network stack (`kernel/net.c`, `kernel/net.h`):**
+  - Ethernet frame send/receive
+  - ARP table (16 entries) with request/reply handling
+  - IP layer with checksum calculation and routing
+  - ICMP echo request/reply (ping)
+  - Automatic gateway ARP resolution
+- **Network configuration (QEMU user-mode NAT):**
+  - Our IP: 10.0.2.15
+  - Gateway: 10.0.2.2
+  - DNS: 10.0.2.3
+- **Ping command (`/bin/ping`):**
+  - Parses IP addresses from command line
+  - Sends 4 ICMP echo requests with 1 second timeout
+  - Shows reply/timeout for each, plus statistics
+- **QEMU flags updated:**
+  - Added `-device virtio-net-device,netdev=net0 -netdev user,id=net0`
+- **kapi additions:**
+  - `net_ping(ip, seq, timeout_ms)` - Blocking ping
+  - `net_poll()` - Process incoming packets
+  - `net_get_ip()`, `net_get_mac()` - Get our addresses
+- **New files:**
+  - `kernel/virtio_net.c` (~400 lines) - Virtio network driver
+  - `kernel/virtio_net.h` - Driver header
+  - `kernel/net.c` (~450 lines) - Network stack
+  - `kernel/net.h` - Network stack header
+  - `user/bin/ping.c` - Ping command
+- **Bug fixed: main() argument order**
+  - crt0.S passes: `main(kapi_t*, argc, argv)`
+  - ping.c had wrong order, caused crash on kapi access
+- **Achievement**: Can ping 1.1.1.1 (Cloudflare) from VibeOS! Packets traverse the real internet!
+
 **NEXT SESSION TODO:**
-- Make music loading non-blocking (show spinner, decode in chunks)
+- UDP + DNS (resolve hostnames like google.com)
+- TCP (connection-oriented protocol)
+- HTTP client (fetch web pages!)
 - Maybe DOOM?

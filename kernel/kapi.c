@@ -14,6 +14,7 @@
 #include "rtc.h"
 #include "virtio_sound.h"
 #include "fat32.h"
+#include "net.h"
 
 // Global kernel API instance
 kapi_t kapi;
@@ -283,4 +284,10 @@ void kapi_init(void) {
 
     // RAM info
     kapi.get_ram_total = kapi_get_ram_total;
+
+    // Networking
+    kapi.net_ping = net_ping;
+    kapi.net_poll = net_poll;
+    kapi.net_get_ip = net_get_ip;
+    kapi.net_get_mac = net_get_mac;
 }

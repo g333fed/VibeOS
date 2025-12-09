@@ -21,6 +21,8 @@
 #include "irq.h"
 #include "rtc.h"
 #include "virtio_sound.h"
+#include "virtio_net.h"
+#include "net.h"
 
 // QEMU virt machine PL011 UART base address
 #define UART0_BASE 0x09000000
@@ -174,6 +176,20 @@ void kernel_main(void) {
 
     // Initialize sound device (for audio playback)
     virtio_sound_init();
+
+    // Initialize network device
+    virtio_net_init();
+
+    // Register network IRQ handler
+    uint32_t net_irq = virtio_net_get_irq();
+    if (net_irq > 0) {
+        irq_register_handler(net_irq, virtio_net_irq_handler);
+        irq_enable_irq(net_irq);
+        printf("[KERNEL] Network IRQ %d registered\n", net_irq);
+    }
+
+    // Initialize network stack (IP, ARP, ICMP)
+    net_init();
 
     // Initialize filesystem (will use FAT32 if disk available)
     vfs_init();
