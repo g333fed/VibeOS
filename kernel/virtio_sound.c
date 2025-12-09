@@ -243,6 +243,9 @@ static const uint8_t *async_pcm_data = NULL;
 static uint32_t async_pcm_bytes = 0;
 static uint32_t async_pcm_offset = 0;
 static int async_playing = 0;
+static int async_paused = 0;
+static uint8_t async_channels = 2;
+static uint32_t async_sample_rate = 44100;
 
 // Memory barriers for device communication
 static inline void mb(void) {
@@ -843,8 +846,57 @@ void virtio_sound_stop(void) {
     if (!snd_base) return;
     playing = 0;
     async_playing = 0;
+    async_paused = 0;
     async_pcm_data = NULL;
     stop_stream();
+}
+
+// Pause async playback - can be resumed later
+void virtio_sound_pause(void) {
+    if (!snd_base) return;
+    if (!async_playing) return;  // Nothing to pause
+
+    // Stop the stream but keep state
+    stop_stream();
+    async_playing = 0;
+    async_paused = 1;
+    playing = 0;
+}
+
+// Resume paused playback
+int virtio_sound_resume(void) {
+    if (!snd_base) return -1;
+    if (!async_paused || !async_pcm_data) return -1;  // Nothing to resume
+
+    int rate_idx = hz_to_rate_index(async_sample_rate);
+    if (rate_idx < 0) return -1;
+
+    // Reconfigure and restart stream
+    if (configure_stream(async_channels, VIRTIO_SND_PCM_FMT_S16, rate_idx) < 0) {
+        return -1;
+    }
+
+    if (prepare_stream() < 0) {
+        return -1;
+    }
+
+    if (start_stream() < 0) {
+        return -1;
+    }
+
+    // Resume from where we left off
+    async_playing = 1;
+    async_paused = 0;
+    playing = 1;
+
+    // Submit next chunk
+    virtio_sound_pump();
+
+    return 0;
+}
+
+int virtio_sound_is_paused(void) {
+    return async_paused;
 }
 
 int virtio_sound_is_playing(void) {
@@ -912,7 +964,7 @@ int virtio_sound_play_pcm_async(const int16_t *data, uint32_t samples, uint8_t c
     if (!snd_base) return -1;
 
     // Stop any current playback
-    if (async_playing) {
+    if (async_playing || async_paused) {
         virtio_sound_stop();
     }
 
@@ -939,6 +991,9 @@ int virtio_sound_play_pcm_async(const int16_t *data, uint32_t samples, uint8_t c
     async_pcm_bytes = samples * channels * sizeof(int16_t);
     async_pcm_offset = 0;
     async_playing = 1;
+    async_paused = 0;
+    async_channels = channels;
+    async_sample_rate = sample_rate;
     playing = 1;
     playback_position = 0;
 

@@ -24,7 +24,7 @@ KERNEL_C_SRCS = $(wildcard $(KERNEL_DIR)/*.c)
 KERNEL_S_SRCS = $(wildcard $(KERNEL_DIR)/*.S)
 
 # Userspace programs to build and install to disk
-USER_PROGS = snake tetris desktop calc vibesh echo ls cat pwd mkdir touch rm term uptime sysmon textedit files date play
+USER_PROGS = snake tetris desktop calc vibesh echo ls cat pwd mkdir touch rm term uptime sysmon textedit files date play music
 
 # Object files
 BOOT_OBJ = $(BUILD_DIR)/boot.o
@@ -39,7 +39,7 @@ USER_ELFS = $(patsubst %,$(USER_BUILD_DIR)/%.elf,$(USER_PROGS))
 KERNEL_ELF = $(BUILD_DIR)/vibeos.elf
 KERNEL_BIN = $(BUILD_DIR)/vibeos.bin
 DISK_IMG = disk.img
-DISK_SIZE = 64
+DISK_SIZE = 1024
 
 # Compiler flags - YOLO -O3
 # Floating point enabled (no -mgeneral-regs-only)
@@ -109,6 +109,7 @@ install-user: user $(DISK_IMG)
 	done
 	@if [ -f beep.mp3 ]; then cp beep.mp3 /tmp/vibeos_mount/beep.mp3 && echo "  Installed /beep.mp3"; fi
 	@if [ -f beep.wav ]; then cp beep.wav /tmp/vibeos_mount/beep.wav && echo "  Installed /beep.wav"; fi
+	@if [ -d Music ]; then mkdir -p /tmp/vibeos_mount/home/user/Music && cp -r Music/* /tmp/vibeos_mount/home/user/Music/ && echo "  Installed /home/user/Music/"; fi
 	@dot_clean /tmp/vibeos_mount 2>/dev/null || true
 	@find /tmp/vibeos_mount -name '._*' -delete 2>/dev/null || true
 	@find /tmp/vibeos_mount -name '.DS_Store' -delete 2>/dev/null || true

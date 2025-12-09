@@ -117,6 +117,9 @@ typedef struct {
     int (*sound_is_playing)(void);                           // Check if playing
     int (*sound_play_pcm)(const void *data, uint32_t samples, uint8_t channels, uint32_t sample_rate);  // Play raw S16LE PCM (blocking)
     int (*sound_play_pcm_async)(const void *data, uint32_t samples, uint8_t channels, uint32_t sample_rate);  // Play raw S16LE PCM (non-blocking)
+    void (*sound_pause)(void);                               // Pause playback (can resume)
+    int (*sound_resume)(void);                               // Resume paused playback
+    int (*sound_is_paused)(void);                            // Check if paused
 
 } kapi_t;
 

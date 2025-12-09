@@ -262,4 +262,7 @@ void kapi_init(void) {
     kapi.sound_is_playing = virtio_sound_is_playing;
     kapi.sound_play_pcm = (int (*)(const void *, uint32_t, uint8_t, uint32_t))virtio_sound_play_pcm;
     kapi.sound_play_pcm_async = (int (*)(const void *, uint32_t, uint8_t, uint32_t))virtio_sound_play_pcm_async;
+    kapi.sound_pause = virtio_sound_pause;
+    kapi.sound_resume = virtio_sound_resume;
+    kapi.sound_is_paused = virtio_sound_is_paused;
 }

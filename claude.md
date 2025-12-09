@@ -14,7 +14,7 @@ VibeOS is a hobby operating system built from scratch for aarch64 (ARM64), targe
 - **Human**: Vibes only. Yells "fuck yeah" when things work. Cannot provide technical guidance.
 - **Claude**: Full technical lead. Makes all architecture decisions. Wozniak energy.
 
-## Current State (Last Updated: Session 27)
+## Current State (Last Updated: Session 28)
 - [x] Bootloader (boot/boot.S) - Sets up stack, clears BSS, jumps to kernel
 - [x] Minimal kernel (kernel/kernel.c) - UART output working
 - [x] Linker script (linker.ld) - Memory layout for QEMU virt
@@ -49,6 +49,7 @@ VibeOS is a hobby operating system built from scratch for aarch64 (ARM64), targe
 - [x] About dialog - Shows VibeOS version, memory, uptime
 - [x] Power management - WFI-based idle, mouse interrupt-driven, 100Hz UI refresh
 - [x] Virtio Sound - Audio playback via virtio-sound device, WAV and MP3 support
+- [x] Music Player - GUI music player with album/track browser, pause/resume, progress bar
 - [x] Floating point - FPU enabled, context switch saves/restores FP regs, calc uses doubles
 
 ## Architecture Decisions Made
@@ -761,6 +762,40 @@ hdiutil detach /Volumes/VIBEOS # Unmount before running QEMU
   - `kernel/irq.c` - Timer calls virtio_sound_pump()
 - **Achievement**: MP3 playback with non-blocking audio! Music plays while you work!
 
+### Session 28
+- **Built GUI Music Player (`/bin/music`)!**
+  - Classic Mac System 7 1-bit B&W aesthetic
+  - Two-panel layout: album sidebar (160px) + track list
+  - Scans `/home/user/Music/` for album folders containing MP3s
+  - Click album to load tracks, double-click track to play
+  - Playback controls: |< (back), Play/Pause, >| (next)
+  - Progress bar with elapsed/total time display
+  - Volume slider (visual only for now)
+  - Keyboard shortcuts: Space (play/pause), N/P (next/prev), arrows (select), Enter (play)
+  - Auto-advances to next track when song ends
+- **Implemented pause/resume in kernel:**
+  - Added `virtio_sound_pause()` - stops stream but keeps playback state
+  - Added `virtio_sound_resume()` - reconfigures and restarts from paused position
+  - Added `virtio_sound_is_paused()` - check pause state
+  - New kapi functions: `sound_pause`, `sound_resume`, `sound_is_paused`
+  - Pause saves offset, resume continues from where it left off
+- **Fixed progress bar duration bug:**
+  - `pcm_samples * 1000` was overflowing uint32_t for songs > 71 seconds
+  - Changed to `(uint64_t)pcm_samples * 1000` for 64-bit multiplication
+  - Added `uint64_t` typedef to `user/lib/vibe.h`
+- **Music player icon added to dock:**
+  - 32x32 musical note icon in `user/lib/icons.h`
+  - Click dock icon to launch music player
+- **New/modified files:**
+  - `user/bin/music.c` - Full music player application (~800 lines)
+  - `user/lib/icons.h` - Added music_icon bitmap
+  - `user/bin/desktop.c` - Added Music app to dock
+  - `kernel/virtio_sound.c` - Pause/resume support, state tracking
+  - `kernel/virtio_sound.h` - New function declarations
+  - `kernel/kapi.c`, `kernel/kapi.h` - Exposed pause/resume to userspace
+  - `user/lib/vibe.h` - Added uint64_t, pause/resume kapi functions
+- **Achievement**: Full-featured music player! Pause, resume, progress tracking all work!
+
 **NEXT SESSION TODO:**
-- Build GUI music player
+- Make music loading non-blocking (show spinner, decode in chunks)
 - Maybe DOOM?

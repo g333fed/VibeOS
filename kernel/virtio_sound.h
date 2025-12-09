@@ -37,8 +37,18 @@ int virtio_sound_play_wav(const void *data, uint32_t size);
 // Stop playback
 void virtio_sound_stop(void);
 
+// Pause playback (can be resumed)
+void virtio_sound_pause(void);
+
+// Resume paused playback
+// Returns 0 on success, -1 on failure
+int virtio_sound_resume(void);
+
 // Check if sound is currently playing
 int virtio_sound_is_playing(void);
+
+// Check if sound is paused
+int virtio_sound_is_paused(void);
 
 // Set volume (0-100)
 void virtio_sound_set_volume(int volume);
