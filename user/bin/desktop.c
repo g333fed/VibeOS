@@ -380,13 +380,14 @@ static void wm_window_set_title(int wid, const char *title) {
 
 // Dock icons with bitmap indices
 static dock_icon_t dock_icons[] = {
-    { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "Snake",  "/bin/snake",  1 },
-    { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "Tetris", "/bin/tetris", 1 },
-    { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "Calc",   "/bin/calc",   0 },
-    { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "Files",  "/bin/files",  0 },
-    { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "Music",  "/bin/music",  0 },
-    { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "Term",   "/bin/term",   0 },
-    { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "SysMon", "/bin/sysmon", 0 },
+    { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "Snake",   "/bin/snake",   1 },
+    { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "Tetris",  "/bin/tetris",  1 },
+    { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "Calc",    "/bin/calc",    0 },
+    { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "Files",   "/bin/files",   0 },
+    { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "Music",   "/bin/music",   0 },
+    { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "Browser", "/bin/browser", 0 },
+    { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "Term",    "/bin/term",    0 },
+    { 0, 0, DOCK_ICON_SIZE, DOCK_ICON_SIZE, "SysMon",  "/bin/sysmon",  0 },
 };
 #define NUM_DOCK_ICONS (sizeof(dock_icons) / sizeof(dock_icons[0]))
 

@@ -61,6 +61,7 @@ VibeOS is a hobby operating system built from scratch for aarch64 (ARM64), targe
 - [x] UDP + DNS - hostname resolution via QEMU's DNS server (10.0.2.3)
 - [x] TCP - full TCP state machine with 3-way handshake, send/recv, close
 - [x] HTTP client - `/bin/fetch` can make HTTP requests to real websites!
+- [x] Web Browser - `/bin/browser` GUI browser with HTML rendering, works on HTTP sites
 
 ## Architecture Decisions Made
 1. **Target**: QEMU virt machine, aarch64, Cortex-A72
@@ -909,8 +910,42 @@ hdiutil detach /Volumes/VIBEOS # Unmount before running QEMU
   - `tcp_connect`, `tcp_send`, `tcp_recv`, `tcp_close`, `tcp_is_connected`
 - **Achievement**: Made an HTTP request to google.com and got a real response!
 
+### Session 32
+- **Web Browser (`/bin/browser`) - GUI web browser!**
+- **Improved fetch command:**
+  - URL parsing (host, port, path extraction)
+  - HTTP header parsing (status code, Content-Length, Location, Content-Type)
+  - Redirect following (301, 302, 307, 308) with max 5 redirects
+  - Handles both absolute and relative redirect URLs
+- **Browser features:**
+  - GUI window with address bar
+  - Click address bar to edit URL, Enter to navigate
+  - HTML parser with tag handling:
+    - Strips `<script>`, `<style>`, `<head>` content
+    - Handles headings (h1-h6), bold, links, lists, paragraphs
+    - Decodes HTML entities (&amp;, &lt;, &gt;, etc.)
+  - Text rendering with word wrap
+  - Scrolling with Up/Down arrows, j/k keys, Space for page down
+  - Scrollbar indicator for long pages
+  - Status bar showing loading/ready state
+  - Keyboard shortcuts: G (go to URL), R (reload)
+- **Browser icon added to dock** (globe icon)
+- **HTTP quirks discovered:**
+  - Many sites force HTTPS (Wikipedia, YouTube, Amazon, DuckDuckGo)
+  - Some sites reject simple User-Agent strings
+  - Changed User-Agent to Chrome on Windows for compatibility
+  - Works well on: httpforever.com, stallman.org, info.cern.ch
+  - HTTPS would require full TLS implementation (~thousands of lines of crypto)
+- **Debugging network issues:**
+  - `yield()` during HTTP receive caused timing issues with desktop
+  - `sleep_ms()` works correctly for polling
+  - Different sites have different response timing behaviors
+- **New files:**
+  - `user/bin/browser.c` (~730 lines) - Full GUI web browser
+  - `user/lib/icons.h` - Added browser (globe) icon
+- **Achievement**: VibeOS has a web browser! Can browse HTTP sites with HTML rendering!
+
 **NEXT SESSION TODO:**
-- HTTPS/TLS? (complex, needs crypto)
-- Better HTTP client (follow redirects, parse headers)
+- HTTPS/TLS? (complex, needs crypto - BearSSL or mbedTLS port)
 - Web server (listen for connections)
 - Maybe DOOM?
