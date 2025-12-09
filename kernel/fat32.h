@@ -123,4 +123,11 @@ int fat32_delete_recursive(const char *path);
 // Returns 0 on success, -1 on error
 int fat32_rename(const char *oldpath, const char *newname);
 
+// Get disk space stats
+// Returns total disk space in KB
+int fat32_get_total_kb(void);
+
+// Returns free disk space in KB (counts free clusters)
+int fat32_get_free_kb(void);
+
 #endif

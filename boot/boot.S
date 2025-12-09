@@ -144,10 +144,10 @@ at_el1:
 
     // Set up the stack pointer (stack grows downward)
     // Note: DTB is at 0x40000000, our RAM starts at 0x40010000 (linker.ld)
-    // Stack at 0x4F000000 - above heap and program region
+    // Stack at 0x5F000000 - near end of 512MB RAM (ends at 0x60000000)
     mov     w10, #'S'
     str     w10, [x9]
-    ldr     x0, =0x4F000000       // Stack top in RAM (above heap and programs)
+    ldr     x0, =0x5F000000       // Stack top in RAM (above heap and programs)
     mov     sp, x0
     mov     w10, #'s'
     str     w10, [x9]

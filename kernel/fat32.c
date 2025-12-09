@@ -1810,3 +1810,27 @@ int fat32_delete_recursive(const char *path) {
     // Delete the directory entry (including any LFN entries)
     return delete_dir_entry_with_lfn(parent_cluster, name);
 }
+
+// Get total disk space in KB
+int fat32_get_total_kb(void) {
+    if (!fs_initialized) return 0;
+    // total_clusters * sectors_per_cluster * bytes_per_sector / 1024
+    uint64_t total_bytes = (uint64_t)fs.total_clusters * fs.sectors_per_cluster * fs.bytes_per_sector;
+    return (int)(total_bytes / 1024);
+}
+
+// Get free disk space in KB (counts free clusters in FAT)
+int fat32_get_free_kb(void) {
+    if (!fs_initialized) return 0;
+
+    uint32_t free_clusters = 0;
+    for (uint32_t cluster = 2; cluster < fs.total_clusters + 2; cluster++) {
+        uint32_t entry = fat_next_cluster(cluster);
+        if (entry == FAT32_FREE) {
+            free_clusters++;
+        }
+    }
+
+    uint64_t free_bytes = (uint64_t)free_clusters * fs.sectors_per_cluster * fs.bytes_per_sector;
+    return (int)(free_bytes / 1024);
+}

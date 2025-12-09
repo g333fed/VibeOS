@@ -13,9 +13,16 @@
 #include "irq.h"
 #include "rtc.h"
 #include "virtio_sound.h"
+#include "fat32.h"
 
 // Global kernel API instance
 kapi_t kapi;
+
+// RAM size helper
+static size_t kapi_get_ram_total(void) {
+    extern uint64_t ram_size;
+    return (size_t)ram_size;
+}
 
 // Wrapper for exit (needs to match signature)
 static void kapi_exit(int status) {
@@ -265,4 +272,15 @@ void kapi_init(void) {
     kapi.sound_pause = virtio_sound_pause;
     kapi.sound_resume = virtio_sound_resume;
     kapi.sound_is_paused = virtio_sound_is_paused;
+
+    // Process info
+    kapi.get_process_count = process_count_ready;
+    kapi.get_process_info = process_get_info;
+
+    // Disk info
+    kapi.get_disk_total = fat32_get_total_kb;
+    kapi.get_disk_free = fat32_get_free_kb;
+
+    // RAM info
+    kapi.get_ram_total = kapi_get_ram_total;
 }

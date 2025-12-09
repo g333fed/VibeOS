@@ -90,6 +90,25 @@ int process_count_ready(void) {
     return count;
 }
 
+int process_get_info(int index, char *name, int name_size, int *state) {
+    if (index < 0 || index >= MAX_PROCESSES) return 0;
+    process_t *p = &proc_table[index];
+    if (p->state == PROC_STATE_FREE) return 0;
+
+    // Copy name
+    if (name && name_size > 0) {
+        int len = strlen(p->name);
+        if (len >= name_size) len = name_size - 1;
+        for (int i = 0; i < len; i++) name[i] = p->name[i];
+        name[len] = '\0';
+    }
+
+    // Return state
+    if (state) *state = (int)p->state;
+
+    return 1;
+}
+
 // Create a new process (load the binary but don't start it)
 int process_create(const char *path, int argc, char **argv) {
     (void)argc;

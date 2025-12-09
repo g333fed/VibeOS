@@ -35,7 +35,7 @@ static block_header_t *free_list = NULL;
 extern uint64_t _bss_end;
 
 // Stack location (must match boot.S!)
-#define KERNEL_STACK_TOP 0x4F000000
+#define KERNEL_STACK_TOP 0x5F000000
 
 // Leave some room below stack for safety (1MB)
 #define STACK_BUFFER (1 * 1024 * 1024)

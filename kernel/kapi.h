@@ -121,6 +121,17 @@ typedef struct {
     int (*sound_resume)(void);                               // Resume paused playback
     int (*sound_is_paused)(void);                            // Check if paused
 
+    // Process info (for sysmon)
+    int (*get_process_count)(void);                          // Number of active processes
+    int (*get_process_info)(int index, char *name, int name_size, int *state);  // Get process info by index
+
+    // Disk info
+    int (*get_disk_total)(void);                             // Total disk space in KB
+    int (*get_disk_free)(void);                              // Free disk space in KB
+
+    // RAM info
+    size_t (*get_ram_total)(void);                           // Total RAM in bytes
+
 } kapi_t;
 
 // Window event types

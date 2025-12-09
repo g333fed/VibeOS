@@ -87,4 +87,8 @@ int process_count_ready(void);         // Count runnable processes
 // Context switch (implemented in assembly)
 void context_switch(cpu_context_t *old_ctx, cpu_context_t *new_ctx);
 
+// Get info about process by index (for sysmon)
+// Returns 1 if slot is active, 0 if free
+int process_get_info(int index, char *name, int name_size, int *state);
+
 #endif
