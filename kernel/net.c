@@ -651,7 +651,41 @@ parse_answer:
 }
 
 // Resolve hostname to IP
+// Check if string is an IP address (e.g., "10.0.2.2") and parse it
+static uint32_t parse_ip_string(const char *str) {
+    uint8_t octets[4];
+    int octet_idx = 0;
+    int current = 0;
+    int digits = 0;
+
+    for (const char *p = str; ; p++) {
+        if (*p >= '0' && *p <= '9') {
+            current = current * 10 + (*p - '0');
+            digits++;
+            if (current > 255 || digits > 3) return 0;  // Invalid
+        } else if (*p == '.' || *p == '\0') {
+            if (digits == 0) return 0;  // No digits before dot
+            if (octet_idx >= 4) return 0;  // Too many octets
+            octets[octet_idx++] = current;
+            current = 0;
+            digits = 0;
+            if (*p == '\0') break;
+        } else {
+            return 0;  // Invalid character - not an IP
+        }
+    }
+
+    if (octet_idx != 4) return 0;  // Need exactly 4 octets
+    return MAKE_IP(octets[0], octets[1], octets[2], octets[3]);
+}
+
 uint32_t dns_resolve(const char *hostname) {
+    // First check if it's already an IP address
+    uint32_t ip = parse_ip_string(hostname);
+    if (ip != 0) {
+        return ip;  // It's an IP, no DNS needed
+    }
+
     // Build DNS query
     uint8_t query[512];
     dns_header_t *dns = (dns_header_t *)query;
