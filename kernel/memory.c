@@ -35,25 +35,35 @@ static block_header_t *free_list = NULL;
 extern uint64_t _bss_end;
 
 // Stack location (must match boot.S!)
-#define KERNEL_STACK_TOP 0x5F000000
+#ifdef TARGET_PI
+#define KERNEL_STACK_TOP 0x1F000000   // Pi: 512MB RAM, stack near top
+#define DTB_ADDR         0x00000000   // Pi: DTB at start of RAM
+#else
+#define KERNEL_STACK_TOP 0x5F000000   // QEMU: stack in high RAM
+#define DTB_ADDR         0x40000000   // QEMU: DTB at RAM start
+#endif
 
 // Leave some room below stack for safety (1MB)
 #define STACK_BUFFER (1 * 1024 * 1024)
 
 void memory_init(void) {
+    // Note: Don't use printf here - console isn't initialized yet!
+
     // Parse DTB to get RAM info
     struct dtb_memory_info mem_info;
     if (dtb_parse((void *)DTB_ADDR, &mem_info) != 0) {
         // Fallback to safe defaults if DTB parsing fails
-        printf("[MEM] WARNING: DTB parse failed, using defaults\n");
+#ifdef TARGET_PI
+        ram_base = 0x00000000;
+        ram_size = 512 * 1024 * 1024;  // 512MB (Pi Zero 2W)
+#else
         ram_base = 0x40000000;
-        ram_size = 256 * 1024 * 1024;  // 256MB
+        ram_size = 256 * 1024 * 1024;  // 256MB (QEMU default)
+#endif
     } else {
         ram_base = mem_info.base;
         ram_size = mem_info.size;
     }
-
-    printf("[MEM] RAM: base=0x%lx, size=%lu MB\n", ram_base, ram_size / (1024 * 1024));
 
     // Heap starts after BSS, aligned to 16 bytes
     // Add 64KB buffer after BSS for safety
@@ -76,9 +86,6 @@ void memory_init(void) {
     free_list->size = heap_end - heap_start - HEADER_SIZE;
     free_list->is_free = 1;
     free_list->next = NULL;
-
-    printf("[MEM] Heap: 0x%lx - 0x%lx (%lu MB)\n",
-           heap_start, heap_end, (heap_end - heap_start) / (1024 * 1024));
 }
 
 void *malloc(size_t size) {

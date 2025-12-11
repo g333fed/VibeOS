@@ -12,6 +12,7 @@
 #include "printf.h"
 
 // Console state
+static int console_initialized = 0;
 static int cursor_row = 0;
 static int cursor_col = 0;
 static int num_rows = 0;
@@ -38,8 +39,9 @@ void console_init(void) {
     cursor_row = 0;
     cursor_col = 0;
 
-    // Clear screen
-    console_clear();
+    // Don't clear screen - keep boot messages visible
+
+    console_initialized = 1;
 }
 
 static void draw_char_at(int row, int col, char c) {
@@ -75,9 +77,10 @@ static void newline(void) {
 }
 
 void console_putc(char c) {
-    // If no framebuffer, fall back to UART
-    if (fb_base == NULL) {
+    // If console not initialized, fall back to UART
+    if (!console_initialized) {
         extern void uart_putc(char c);
+        if (c == '\n') uart_putc('\r');
         uart_putc(c);
         return;
     }

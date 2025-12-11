@@ -59,11 +59,15 @@ void kernel_main(void) {
     uart_putc('\r');
     uart_putc('\n');
 
-    // Test printf with simplest possible case
-    uart_putc('1');
-    printf("test");
-    uart_putc('2');
-    printf("\n");
+    // Initialize memory management first (needed for malloc)
+    memory_init();
+
+    // Initialize framebuffer and console ASAP so printf goes to screen on Pi
+    fb_init();
+    console_init();
+
+
+    // Now printf works on both UART (QEMU) and screen (Pi)
     printf("  ╦  ╦╦╔╗ ╔═╗╔═╗╔═╗\n");
     printf("  ╚╗╔╝║╠╩╗║╣ ║ ║╚═╗\n");
     printf("   ╚╝ ╩╚═╝╚═╝╚═╝╚═╝\n");
@@ -72,9 +76,6 @@ void kernel_main(void) {
     printf("=====================\n\n");
     printf("[BOOT] Kernel loaded successfully!\n");
     printf("[BOOT] UART initialized.\n");
-
-    // Initialize memory management
-    memory_init();
     printf("[BOOT] Memory initialized.\n");
     printf("       Heap: %p - %p\n", (void *)heap_start, (void *)heap_end);
     printf("       Free: %lu MB\n", memory_free() / 1024 / 1024);
@@ -95,37 +96,29 @@ void kernel_main(void) {
     free(test2);
     printf("       Freed allocations. Free: %lu MB\n", memory_free() / 1024 / 1024);
 
-    printf("[BOOT] Running on QEMU virt machine.\n");
+    // Splash screen
+    console_set_color(COLOR_GREEN, COLOR_BLACK);
+    console_puts("  _   _ _ _          ___  ____  \n");
+    console_puts(" | | | (_) |__   ___/ _ \\/ ___| \n");
+    console_puts(" | | | | | '_ \\ / _ \\ | | \\___ \\ \n");
+    console_puts(" | \\_/ | | |_) |  __/ |_| |___) |\n");
+    console_puts("  \\___/|_|_.__/ \\___|\\___/|____/ \n");
+    console_set_color(COLOR_WHITE, COLOR_BLACK);
+    console_puts("                            by ");
+    console_set_color(COLOR_AMBER, COLOR_BLACK);
+    console_puts("Claude\n");
+    console_puts("\n");
+    console_set_color(COLOR_WHITE, COLOR_BLACK);
+    console_puts("==========================================\n\n");
 
-    // Initialize framebuffer
-    if (fb_init() == 0) {
-        // Initialize console
-        console_init();
-        printf("[FB] Console initialized: %dx%d chars\n", console_cols(), console_rows());
+    console_set_color(COLOR_GREEN, COLOR_BLACK);
+    console_puts("The vibes are immaculate.\n\n");
 
-        // Print to console (on screen!)
-        console_set_color(COLOR_GREEN, COLOR_BLACK);
-        console_puts("  _   _ _ _          ___  ____  \n");
-        console_puts(" | | | (_) |__   ___/ _ \\/ ___| \n");
-        console_puts(" | | | | | '_ \\ / _ \\ | | \\___ \\ \n");
-        console_puts(" | \\_/ | | |_) |  __/ |_| |___) |\n");
-        console_puts("  \\___/|_|_.__/ \\___|\\___/|____/ \n");
-        console_set_color(COLOR_WHITE, COLOR_BLACK);
-        console_puts("                            by ");
-        console_set_color(COLOR_AMBER, COLOR_BLACK);
-        console_puts("Claude\n");
-        console_puts("\n");
-        console_set_color(COLOR_WHITE, COLOR_BLACK);
-        console_puts("==========================================\n\n");
+    console_set_color(COLOR_WHITE, COLOR_BLACK);
+    console_puts("System ready.\n");
+    console_puts("\n");
 
-        console_set_color(COLOR_GREEN, COLOR_BLACK);
-        console_puts("The vibes are immaculate.\n\n");
-
-        console_set_color(COLOR_WHITE, COLOR_BLACK);
-        console_puts("System ready.\n");
-        console_puts("\n");
-    }
-
+#ifdef TARGET_QEMU
     // Initialize interrupt controller (GIC)
     irq_init();
 
@@ -134,8 +127,14 @@ void kernel_main(void) {
 
     // Initialize RTC (real time clock)
     rtc_init();
+#else
+    // Pi: Uses different interrupt controller (BCM2710)
+    // For now, we use polling mode
+    printf("[KERNEL] Running in polling mode (no interrupts)\n");
+#endif
 
-    // Initialize keyboard
+#ifdef TARGET_QEMU
+    // Initialize keyboard (virtio-input on QEMU)
     keyboard_init();
 
     // Register keyboard IRQ handler
@@ -146,7 +145,7 @@ void kernel_main(void) {
         printf("[KERNEL] Keyboard IRQ %d registered\n", kbd_irq);
     }
 
-    // Initialize mouse (for GUI)
+    // Initialize mouse (virtio-tablet on QEMU)
     mouse_init();
 
     // Register mouse IRQ handler
@@ -156,10 +155,22 @@ void kernel_main(void) {
         irq_enable_irq(mouse_irq);
         printf("[KERNEL] Mouse IRQ %d registered\n", mouse_irq);
     }
+#else
+    // Pi: Keyboard and mouse require USB drivers (not yet implemented)
+    printf("[KERNEL] Note: USB input devices not yet supported on Pi\n");
+#endif
 
     // Initialize block device (for persistent storage)
+#ifdef TARGET_QEMU
     virtio_blk_init();
+#else
+    // For Pi, use HAL block device (EMMC/SD card)
+    if (hal_blk_init() < 0) {
+        printf("[KERNEL] Block device init failed!\n");
+    }
+#endif
 
+#ifdef TARGET_QEMU
     // Initialize sound device (for audio playback)
     virtio_sound_init();
 
@@ -176,6 +187,7 @@ void kernel_main(void) {
 
     // Initialize network stack (IP, ARP, ICMP)
     net_init();
+#endif
 
     // Initialize filesystem (will use FAT32 if disk available)
     vfs_init();
@@ -195,10 +207,12 @@ void kernel_main(void) {
     // Load embedded binaries into VFS
     initramfs_init();
 
+#ifdef TARGET_QEMU
     // Enable interrupts now that everything is initialized
     printf("[KERNEL] Enabling interrupts...\n");
     irq_enable();
     printf("[KERNEL] Interrupts enabled!\n");
+#endif
 
     printf("\n");
     printf("[KERNEL] Starting shell...\n");

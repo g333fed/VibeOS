@@ -9,8 +9,11 @@
 #include <stdint.h>
 #include <stddef.h>
 
-// External UART function from kernel.c
+// Output destinations differ by platform:
+// QEMU: UART (serial to terminal)
+// Pi: Framebuffer (no serial cable typically)
 extern void uart_putc(char c);
+extern void console_putc(char c);
 
 // Local strlen to avoid circular deps
 static int local_strlen(const char *s) {
@@ -29,12 +32,14 @@ typedef struct {
     int max;
 } sprintf_ctx_t;
 
-static void uart_putchar(char c, void *ctx) {
+static void printf_putchar(char c, void *ctx) {
     (void)ctx;
-    if (c == '\n') {
-        uart_putc('\r');
-    }
+#ifdef TARGET_QEMU
+    if (c == '\n') uart_putc('\r');
     uart_putc(c);
+#else
+    console_putc(c);
+#endif
 }
 
 static void sprintf_putchar(char c, void *ctx) {
@@ -219,8 +224,7 @@ int printf(const char *fmt, ...) {
 
     while (*fmt) {
         if (*fmt != '%') {
-            if (*fmt == '\n') uart_putc('\r');
-            uart_putc(*fmt++);
+            printf_putchar(*fmt++, NULL);
             count++;
             continue;
         }
@@ -254,54 +258,54 @@ int printf(const char *fmt, ...) {
             case 'd':
             case 'i': {
                 int64_t val = is_long ? va_arg(args, int64_t) : va_arg(args, int);
-                count += print_signed(uart_putchar, NULL, val, width, pad_zero);
+                count += print_signed(printf_putchar, NULL, val, width, pad_zero);
                 break;
             }
             case 'u': {
                 uint64_t val = is_long ? va_arg(args, uint64_t) : va_arg(args, unsigned int);
-                count += print_num(uart_putchar, NULL, val, 10, width, pad_zero, 0);
+                count += print_num(printf_putchar, NULL, val, 10, width, pad_zero, 0);
                 break;
             }
             case 'x': {
                 uint64_t val = is_long ? va_arg(args, uint64_t) : va_arg(args, unsigned int);
-                count += print_num(uart_putchar, NULL, val, 16, width, pad_zero, 0);
+                count += print_num(printf_putchar, NULL, val, 16, width, pad_zero, 0);
                 break;
             }
             case 'X': {
                 uint64_t val = is_long ? va_arg(args, uint64_t) : va_arg(args, unsigned int);
-                count += print_num(uart_putchar, NULL, val, 16, width, pad_zero, 1);
+                count += print_num(printf_putchar, NULL, val, 16, width, pad_zero, 1);
                 break;
             }
             case 'p': {
                 uint64_t val = (uint64_t)va_arg(args, void *);
-                uart_putc('0');
-                uart_putc('x');
+                printf_putchar('0', NULL);
+                printf_putchar('x', NULL);
                 count += 2;
-                count += print_num(uart_putchar, NULL, val, 16, 16, 1, 0);
+                count += print_num(printf_putchar, NULL, val, 16, 16, 1, 0);
                 break;
             }
             case 's': {
                 const char *s = va_arg(args, const char *);
                 if (!s) s = "(null)";
                 while (*s) {
-                    uart_putc(*s++);
+                    printf_putchar(*s++, NULL);
                     count++;
                 }
                 break;
             }
             case 'c': {
                 char c = (char)va_arg(args, int);
-                uart_putc(c);
+                printf_putchar(c, NULL);
                 count++;
                 break;
             }
             case '%':
-                uart_putc('%');
+                printf_putchar('%', NULL);
                 count++;
                 break;
             default:
-                uart_putc('%');
-                uart_putc(*fmt);
+                printf_putchar('%', NULL);
+                printf_putchar(*fmt, NULL);
                 count += 2;
                 break;
         }

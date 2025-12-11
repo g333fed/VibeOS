@@ -17,18 +17,16 @@ uint32_t fb_pitch = 0;
 uint32_t *fb_base = NULL;
 
 int fb_init(void) {
-    printf("[FB] Initializing framebuffer...\n");
+    // Note: Don't use printf here - console isn't initialized yet!
 
     // Call platform-specific init
     if (hal_fb_init(1024, 768) < 0) {
-        printf("[FB] ERROR: Platform FB init failed!\n");
         return -1;
     }
 
     // Get info from HAL
     hal_fb_info_t *info = hal_fb_get_info();
     if (!info || !info->base) {
-        printf("[FB] ERROR: No framebuffer info!\n");
         return -1;
     }
 
@@ -38,12 +36,9 @@ int fb_init(void) {
     fb_height = info->height;
     fb_pitch = info->pitch;
 
-    printf("[FB] Configured: %dx%d @ %p\n", fb_width, fb_height, fb_base);
-
     // Clear to black
     fb_clear(COLOR_BLACK);
 
-    printf("[FB] Framebuffer ready!\n");
     return 0;
 }
 

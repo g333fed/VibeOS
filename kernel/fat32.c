@@ -6,7 +6,7 @@
  */
 
 #include "fat32.h"
-#include "virtio_blk.h"
+#include "hal/hal.h"
 #include "printf.h"
 #include "string.h"
 #include "memory.h"
@@ -47,6 +47,9 @@ typedef struct __attribute__((packed)) {
 static fat32_fs_t fs;
 static int fs_initialized = 0;
 
+// Partition offset (sector where FAT32 partition starts)
+static uint32_t partition_offset = 0;
+
 // Sector buffer
 static uint8_t sector_buf[512] __attribute__((aligned(16)));
 
@@ -54,24 +57,95 @@ static uint8_t sector_buf[512] __attribute__((aligned(16)));
 static uint8_t *cluster_buf = NULL;
 static uint32_t cluster_buf_size = 0;
 
-// Read a sector from disk
+// Read a sector from disk (adds partition offset)
 static int read_sector(uint32_t sector, void *buf) {
-    return virtio_blk_read(sector, 1, buf);
+    return hal_blk_read(partition_offset + sector, buf, 1);
 }
 
-// Write a sector to disk
+// Write a sector to disk (adds partition offset)
 static int write_sector(uint32_t sector, const void *buf) {
-    return virtio_blk_write(sector, 1, buf);
+    return hal_blk_write(partition_offset + sector, buf, 1);
 }
 
-// Write multiple sectors
+// Write multiple sectors (adds partition offset)
 static int write_sectors(uint32_t sector, uint32_t count, const void *buf) {
-    return virtio_blk_write(sector, count, buf);
+    return hal_blk_write(partition_offset + sector, buf, count);
 }
 
-// Read multiple sectors
+// Read multiple sectors (adds partition offset)
 static int read_sectors(uint32_t sector, uint32_t count, void *buf) {
-    return virtio_blk_read(sector, count, buf);
+    return hal_blk_read(partition_offset + sector, buf, count);
+}
+
+// MBR partition entry structure
+typedef struct __attribute__((packed)) {
+    uint8_t  status;
+    uint8_t  chs_first[3];
+    uint8_t  type;
+    uint8_t  chs_last[3];
+    uint32_t lba_start;
+    uint32_t sector_count;
+} mbr_partition_t;
+
+// Find FAT32 partition (prefers partition 2, falls back to partition 1)
+// Returns the starting sector of the partition, or 0 for raw disk
+static uint32_t find_fat32_partition(void) {
+    // Read MBR (sector 0, bypassing partition_offset)
+    if (hal_blk_read(0, sector_buf, 1) < 0) {
+        printf("[FAT32] Failed to read MBR\n");
+        return 0;
+    }
+
+    // Check MBR signature
+    if (sector_buf[510] != 0x55 || sector_buf[511] != 0xAA) {
+        printf("[FAT32] No MBR signature, assuming raw FAT32 disk\n");
+        return 0;
+    }
+
+    // Partition table starts at offset 446
+    mbr_partition_t *partitions = (mbr_partition_t *)(sector_buf + 446);
+
+    // Read partition entries manually to avoid alignment issues
+    uint32_t part_start[4];
+    uint8_t part_type[4];
+    for (int i = 0; i < 4; i++) {
+        int off = 446 + i * 16;
+        part_type[i] = sector_buf[off + 4];
+        part_start[i] = sector_buf[off + 8] | (sector_buf[off + 9] << 8) |
+                        (sector_buf[off + 10] << 16) | (sector_buf[off + 11] << 24);
+    }
+
+    printf("[FAT32] Partition table:\n");
+    for (int i = 0; i < 4; i++) {
+        if (part_type[i] != 0) {
+            printf("[FAT32]   Part %d: type=0x%02x start=%u\n",
+                   i + 1, part_type[i], part_start[i]);
+        }
+    }
+
+    // Prefer partition 2 (typical Pi layout: part1=boot, part2=data)
+    // FAT32 types: 0x0B (FAT32), 0x0C (FAT32 LBA)
+    if (part_type[1] == 0x0B || part_type[1] == 0x0C) {
+        printf("[FAT32] Using partition 2 at sector %u\n", part_start[1]);
+        return part_start[1];
+    }
+
+    // Fall back to partition 1
+    if (part_type[0] == 0x0B || part_type[0] == 0x0C) {
+        printf("[FAT32] Using partition 1 at sector %u\n", part_start[0]);
+        return part_start[0];
+    }
+
+    // Check for any FAT32 partition
+    for (int i = 0; i < 4; i++) {
+        if (part_type[i] == 0x0B || part_type[i] == 0x0C) {
+            printf("[FAT32] Using partition %d at sector %u\n", i + 1, part_start[i]);
+            return part_start[i];
+        }
+    }
+
+    printf("[FAT32] No FAT32 partition found, assuming raw disk\n");
+    return 0;
 }
 
 // Get the first sector of a cluster
@@ -214,7 +288,11 @@ static int name_match(const char *name1, const char *name2) {
 int fat32_init(void) {
     printf("[FAT32] Initializing...\n");
 
-    // Read boot sector
+    // Find FAT32 partition (handles MBR parsing)
+    partition_offset = find_fat32_partition();
+    printf("[FAT32] Partition offset: %u sectors\n", partition_offset);
+
+    // Read boot sector (now from partition start)
     printf("[FAT32] Reading boot sector...\n");
     int ret = read_sector(0, sector_buf);
     printf("[FAT32] read_sector returned %d\n", ret);

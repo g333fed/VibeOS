@@ -110,7 +110,8 @@ pi:
 
 # Install to Pi SD card
 # Usage: make install-pi DISK=disk5s2
-install-pi: pi
+# Builds kernel for Pi and user programs, then installs to SD card
+install-pi: pi user
 	@if [ -z "$(DISK)" ]; then \
 		echo "Usage: make install-pi DISK=<disk>"; \
 		echo "Example: make install-pi DISK=disk5s2"; \
