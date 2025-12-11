@@ -84,4 +84,11 @@ uint64_t hal_get_ram_size(void);
  */
 void hal_wfi(void);             // Wait for interrupt
 
+/*
+ * USB (Optional - not all platforms support this)
+ * Returns 0 on success, -1 if not supported/failed
+ */
+int hal_usb_init(void);
+int hal_usb_keyboard_poll(uint8_t *report, int report_len);
+
 #endif // HAL_H

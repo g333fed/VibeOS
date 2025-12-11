@@ -156,8 +156,10 @@ void kernel_main(void) {
         printf("[KERNEL] Mouse IRQ %d registered\n", mouse_irq);
     }
 #else
-    // Pi: Keyboard and mouse require USB drivers (not yet implemented)
-    printf("[KERNEL] Note: USB input devices not yet supported on Pi\n");
+    // Pi: Initialize USB controller for keyboard/mouse
+    if (hal_usb_init() < 0) {
+        printf("[KERNEL] USB init failed - no USB input devices\n");
+    }
 #endif
 
     // Initialize block device (for persistent storage)
