@@ -107,6 +107,107 @@ static void draw_file_icon(int x, int y, uint32_t bg) {
     }
 }
 
+// ============ File Type Detection ============
+
+// Get file extension (returns pointer to char after last '.')
+static const char *get_extension(const char *filename) {
+    const char *dot = 0;
+    for (const char *p = filename; *p; p++) {
+        if (*p == '.') dot = p + 1;
+    }
+    return dot;  // NULL if no extension
+}
+
+// Case-insensitive extension match
+static int ext_match(const char *ext, const char *target) {
+    if (!ext) return 0;
+    while (*ext && *target) {
+        char a = *ext++;
+        char b = *target++;
+        if (a >= 'A' && a <= 'Z') a += 32;
+        if (b >= 'A' && b <= 'Z') b += 32;
+        if (a != b) return 0;
+    }
+    return (*ext == 0 && *target == 0);
+}
+
+// Check if file contents are text (not binary)
+// Reads first 512 bytes and checks for null bytes / control chars
+static int is_text_file(const char *path) {
+    void *file = api->open(path);
+    if (!file) return 0;
+
+    int size = api->file_size(file);
+    if (size <= 0) return 1;  // Empty file counts as text
+
+    // Read first 512 bytes
+    char buf[512];
+    int to_read = size < 512 ? size : 512;
+    int n = api->read(file, buf, to_read, 0);
+    if (n <= 0) return 1;
+
+    // Check for binary indicators
+    int non_printable = 0;
+    for (int i = 0; i < n; i++) {
+        unsigned char c = (unsigned char)buf[i];
+
+        // Null byte = definitely binary
+        if (c == 0) return 0;
+
+        // Count non-printable chars (excluding common whitespace)
+        if (c < 32 && c != '\t' && c != '\n' && c != '\r') {
+            non_printable++;
+        }
+        // High bytes (128-255) could be UTF-8, allow some
+        if (c >= 128 && c < 194) {
+            // Invalid UTF-8 start byte
+            non_printable++;
+        }
+    }
+
+    // If more than 10% non-printable, probably binary
+    if (non_printable * 10 > n) return 0;
+
+    return 1;
+}
+
+// Open file with appropriate app based on type
+static void open_file(const char *path, const char *filename) {
+    const char *ext = get_extension(filename);
+
+    // Image files -> viewer
+    if (ext_match(ext, "png") || ext_match(ext, "jpg") ||
+        ext_match(ext, "jpeg") || ext_match(ext, "bmp") ||
+        ext_match(ext, "gif")) {
+        char *argv[2];
+        argv[0] = "/bin/viewer";
+        argv[1] = (char *)path;
+        api->spawn_args("/bin/viewer", 2, argv);
+        return;
+    }
+
+    // Audio files -> music
+    if (ext_match(ext, "mp3") || ext_match(ext, "wav")) {
+        char *argv[2];
+        argv[0] = "/bin/music";
+        argv[1] = (char *)path;
+        api->spawn_args("/bin/music", 2, argv);
+        return;
+    }
+
+    // Check if it's a text file
+    if (is_text_file(path)) {
+        char *argv[2];
+        argv[0] = "/bin/textedit";
+        argv[1] = (char *)path;
+        api->spawn_args("/bin/textedit", 2, argv);
+        return;
+    }
+
+    // Binary file - can't open
+    // TODO: Show "Cannot open binary file" dialog
+}
+
 // ============ Recursive Delete (userspace implementation) ============
 
 static int delete_recursive(const char *path) {
@@ -248,18 +349,23 @@ static void enter_selected(void) {
         return;
     }
 
+    // Build full path
+    char full_path[256];
+    if (strcmp(current_path, "/") == 0) {
+        strcpy(full_path, "/");
+        strcat(full_path, item->name);
+    } else {
+        strcpy(full_path, current_path);
+        strcat(full_path, "/");
+        strcat(full_path, item->name);
+    }
+
     if (item->is_dir) {
         // Enter directory
-        char new_path[256];
-        if (strcmp(current_path, "/") == 0) {
-            strcpy(new_path, "/");
-            strcat(new_path, item->name);
-        } else {
-            strcpy(new_path, current_path);
-            strcat(new_path, "/");
-            strcat(new_path, item->name);
-        }
-        navigate_to(new_path);
+        navigate_to(full_path);
+    } else {
+        // Open file with appropriate app
+        open_file(full_path, item->name);
     }
 }
 

@@ -844,3 +844,22 @@
   - `ends_with()` helper for case-insensitive extension checking
   - Prep work for file manager associations (double-click .mp3/.wav opens Music player)
 - **Achievement**: Music player ready for file associations!
+
+- **File Manager - Default App Associations!**
+  - Double-click files to open them with the appropriate app
+  - Smart file type detection:
+    - Image extensions (`.png`, `.jpg`, `.jpeg`, `.bmp`, `.gif`) → `/bin/viewer`
+    - Audio extensions (`.mp3`, `.wav`) → `/bin/music`
+    - Everything else: content-based text detection
+  - `is_text_file()` - reads first 512 bytes, checks for null bytes and control chars
+    - Null byte = binary file
+    - >10% non-printable chars = binary file
+    - Otherwise = text file → `/bin/textedit`
+  - No giant extension list needed - just 9 media extensions, rest is auto-detected
+  - Binary files silently ignored (no app association)
+- **Added `spawn_args()` to kernel API:**
+  - Like `spawn()` but with argc/argv support
+  - Non-blocking: parent continues immediately
+  - Files app now opens files concurrently (can open multiple at once)
+  - `kernel/kapi.c`, `kernel/kapi.h`, `user/lib/vibe.h` updated
+- **Achievement**: File associations complete! Double-click any file to open it!

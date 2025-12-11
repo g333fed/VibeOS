@@ -81,6 +81,15 @@ static int kapi_spawn(const char *path) {
     return pid;
 }
 
+// Wrapper for spawn with arguments - create and start a new process
+static int kapi_spawn_args(const char *path, int argc, char **argv) {
+    int pid = process_create(path, argc, argv);
+    if (pid > 0) {
+        process_start(pid);
+    }
+    return pid;
+}
+
 // Wrapper for console color
 static void kapi_set_color(uint32_t fg, uint32_t bg) {
     console_set_color(fg, bg);
@@ -216,6 +225,7 @@ void kapi_init(void) {
     kapi.exec_args = kapi_exec_args;
     kapi.yield = process_yield;
     kapi.spawn = kapi_spawn;
+    kapi.spawn_args = kapi_spawn_args;
 
     // Console info
     kapi.console_rows = console_rows;

@@ -59,6 +59,7 @@ typedef struct kapi {
     int  (*exec_args)(const char *path, int argc, char **argv);  // Run with arguments
     void (*yield)(void);              // Give up CPU to other processes
     int  (*spawn)(const char *path);  // Start a new process (returns immediately)
+    int  (*spawn_args)(const char *path, int argc, char **argv);  // Spawn with arguments
 
     // Console info
     int  (*console_rows)(void);       // Get number of console rows
