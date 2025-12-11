@@ -19,7 +19,7 @@ VibeOS is a hobby operating system built from scratch for aarch64 (ARM64), targe
 - **Human**: Vibes only. Yells "fuck yeah" when things work. Cannot provide technical guidance.
 - **Claude**: Full technical lead. Makes all architecture decisions. Wozniak energy.
 
-## Current State (Last Updated: Session 34)
+## Current State (Last Updated: Session 40)
 - [x] Bootloader (boot/boot.S) - Sets up stack, clears BSS, jumps to kernel
 - [x] Minimal kernel (kernel/kernel.c) - UART output working
 - [x] Linker script (linker.ld) - Memory layout for QEMU virt
@@ -64,6 +64,9 @@ VibeOS is a hobby operating system built from scratch for aarch64 (ARM64), targe
 - [x] Web Browser - `/bin/browser` GUI browser with HTML rendering, works on HTTP sites
 - [x] TLS 1.2 - Full HTTPS support via TLSe library, ECC key exchange working!
 - [x] HTTPS client - `/bin/fetch` can make HTTPS requests to google.com, etc!
+- [x] Raspberry Pi Zero 2W support - boots on real hardware!
+- [x] Pi SD card (EMMC) driver - FAT32 filesystem works, userspace runs!
+- [x] Pi USB host (DWC2) - Device enumeration working, HID keyboard detected!
 
 ## Architecture Decisions Made
 1. **Target**: QEMU virt machine, aarch64, Cortex-A72
@@ -250,6 +253,10 @@ hdiutil detach /Volumes/VIBEOS # Unmount before running QEMU
 - **DTB at RAM start**: QEMU places the Device Tree Blob at 0x40000000 (start of RAM). Linker script must start .data/.bss after DTB area (we use 0x40200000, leaving 2MB for DTB).
 - **DTB unaligned access**: Reading 32/64-bit values from DTB can cause alignment faults on ARM. Read bytes individually and assemble manually (see `read_be32`/`read_be64` in dtb.c).
 - **TTF italic buffer overflow**: When applying styles to glyphs, track original glyph width vs allocated stride separately. If a function calculates "extra space needed" and you pass an already-expanded buffer, it will double the expansion and overflow. The `apply_italic` bug wrote past buffer end, corrupting heap metadata.
+- **DWC2 USB MPS for Full Speed**: When enumerating Full Speed USB devices, use MPS=64, not 8! FS devices can send up to 64 bytes per packet. Using MPS=8 causes babble error when byte 9 arrives. Only Low Speed devices use MPS=8.
+- **DWC2 USB PHY clock on Pi**: Pi uses UTMI+ PHY at 60MHz. Set HCFG.FSLSPCLKSEL=0 (30/60MHz mode), NOT 1 (48MHz). Wrong setting causes premature frame end and babble errors.
+- **DWC2 USB multi-packet IN transfers**: In slave mode, must re-enable channel after each packet received. Controller doesn't automatically continue. Re-enable on ACK and IN_COMPLETE events.
+- **DWC2 USB GRXSTSP parsing**: Only read FIFO data when pktsts=2 (IN data) and bcnt>0. Other status values (3=complete, 7=halted) don't have data to read.
 
 ## Session Log
 For detailed session-by-session development history, see [session_log.md](session_log.md).

@@ -920,3 +920,59 @@
   - Keyboard/Mouse (need USB HID stack)
   - Sound/Network (skip for v1 Pi port)
 - **Achievement**: VibeOS boots on real hardware! First try!
+
+### Session 40
+- **USB Host Driver for Raspberry Pi Zero 2W!**
+- **DWC2 (DesignWare USB 2.0) controller driver (`kernel/hal/pizero2w/usb.c`):**
+  - ~1100 lines of bare-metal USB host implementation
+  - Based on Linux dwc2 driver documentation (generated via Gemini analysis)
+  - Full register definitions for Global, Host, and Channel registers
+  - Slave mode (no DMA) - CPU handles FIFO read/write
+- **USB initialization sequence:**
+  - Power on USB controller via VideoCore mailbox (device ID 3)
+  - Core soft reset (wait for AHBIDLE, trigger CSFTRST, wait for completion)
+  - PHY configuration (UTMI+ 8-bit interface, no PHYSEL for Pi's HS PHY)
+  - Force host mode via GUSBCFG
+  - FIFO sizing (RxFIFO 256 words, TxFIFO 256 words each)
+  - Frame interval configuration (60MHz PHY clock, HFIR=60000)
+- **Port control:**
+  - VBUS power on via HPRT0.PRTPWR
+  - Device connection detection via HPRT0.PRTCONNSTS
+  - Port reset (50ms assert, then deassert)
+  - Speed detection from HPRT0.PRTSPD (Full Speed detected)
+- **Control transfers (SETUP/DATA/STATUS):**
+  - Channel-based transfers using HCCHAR, HCTSIZ, HCINT
+  - Proper NAK retry handling with channel re-enable
+  - Multi-packet IN transfers (re-enable channel after each packet)
+  - FIFO read/write with GRXSTSP status parsing
+- **USB enumeration working:**
+  - GET_DESCRIPTOR (device) - VID/PID and max packet size
+  - SET_ADDRESS - assign device address 1
+  - GET_DESCRIPTOR (configuration) - full config with interfaces
+  - SET_CONFIGURATION - activate device
+  - HID keyboard detected!
+- **Key debugging insights (with help from Gemini):**
+  - **Babble error cause #1:** MPS=8 for Full Speed devices - should be 64!
+    - FS devices send up to 64 bytes per packet, 8 causes babble on byte 9
+  - **Babble error cause #2:** Wrong PHY clock setting
+    - Pi uses UTMI+ PHY at 60MHz, not dedicated 48MHz FS PHY
+    - FSLSPCLKSEL must be 0 (30/60MHz), not 1 (48MHz)
+  - **Multi-packet timeout:** Need to re-enable channel after each IN packet
+    - Slave mode requires explicit channel re-enable for each packet
+    - Fixed by re-enabling on ACK and IN_COMPLETE events
+- **HAL integration:**
+  - Added `hal_usb_init()` and `hal_usb_keyboard_poll()` to hal.h
+  - QEMU stub returns -1 (uses virtio input instead)
+  - Pi calls USB init during kernel startup
+- **What works:**
+  - Device detection and enumeration
+  - Reading device/config descriptors
+  - HID keyboard identification
+- **What's next:**
+  - Interrupt transfers for HID reports (keyboard input)
+  - HID report parsing
+  - Wire up to HAL keyboard interface
+- **New files:**
+  - `kernel/hal/pizero2w/usb.c` - DWC2 USB host driver
+  - `docs/rpi_usb.md` - Comprehensive USB implementation documentation
+- **Achievement**: USB enumeration works on real Pi hardware! Keyboard detected!
