@@ -128,9 +128,11 @@ void kernel_main(void) {
     // Initialize RTC (real time clock)
     rtc_init();
 #else
-    // Pi: Uses different interrupt controller (BCM2710)
-    // For now, we use polling mode
-    printf("[KERNEL] Running in polling mode (no interrupts)\n");
+    // Pi: Initialize BCM2836 ARM Local + BCM2835 interrupt controllers
+    hal_irq_init();
+
+    // Initialize timer (100ms tick for visible LED blink during testing)
+    hal_timer_init(100);
 #endif
 
 #ifdef TARGET_QEMU
@@ -213,6 +215,11 @@ void kernel_main(void) {
     // Enable interrupts now that everything is initialized
     printf("[KERNEL] Enabling interrupts...\n");
     irq_enable();
+    printf("[KERNEL] Interrupts enabled!\n");
+#else
+    // Pi: Enable interrupts
+    printf("[KERNEL] Enabling interrupts...\n");
+    hal_irq_enable();
     printf("[KERNEL] Interrupts enabled!\n");
 #endif
 
