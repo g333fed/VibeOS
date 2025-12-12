@@ -1,19 +1,10 @@
 /*
- * Raspberry Pi Zero 2W Serial Driver
+ * Raspberry Pi Serial Driver
  *
- * Mini UART at 0x3F215000
+ * PL011 UART at 0x3F201000
  *
- * The Pi has two UARTs:
- * 1. PL011 (full UART) - used by Bluetooth by default
- * 2. Mini UART - simpler, on GPIO 14/15
- *
- * We use the Mini UART since it's available on GPIO header.
- *
- * NOTE: Mini UART clock is derived from core clock, which varies!
- * For reliable serial, use config.txt: core_freq=250 or enable_uart=1
- *
- * Even though we're going framebuffer-first, having serial output
- * helps if we ever need to debug with a USB-serial adapter.
+ * Works on both real Pi (with serial cable) and QEMU raspi3b.
+ * On real Pi, requires disable_bt in config.txt to free PL011 from Bluetooth.
  */
 
 #include "../hal.h"
@@ -21,96 +12,63 @@
 // Peripheral base for Pi Zero 2W (BCM2710)
 #define PERI_BASE       0x3F000000
 
-// GPIO registers
-#define GPIO_BASE       (PERI_BASE + 0x200000)
-#define GPFSEL1         (*(volatile uint32_t *)(GPIO_BASE + 0x04))
-#define GPPUD           (*(volatile uint32_t *)(GPIO_BASE + 0x94))
-#define GPPUDCLK0       (*(volatile uint32_t *)(GPIO_BASE + 0x98))
+// PL011 UART base
+#define UART0_BASE      (PERI_BASE + 0x201000)
 
-// Aux / Mini UART registers
-#define AUX_BASE        (PERI_BASE + 0x215000)
-#define AUX_ENABLES     (*(volatile uint32_t *)(AUX_BASE + 0x04))
-#define AUX_MU_IO       (*(volatile uint32_t *)(AUX_BASE + 0x40))
-#define AUX_MU_IER      (*(volatile uint32_t *)(AUX_BASE + 0x44))
-#define AUX_MU_IIR      (*(volatile uint32_t *)(AUX_BASE + 0x48))
-#define AUX_MU_LCR      (*(volatile uint32_t *)(AUX_BASE + 0x4C))
-#define AUX_MU_MCR      (*(volatile uint32_t *)(AUX_BASE + 0x50))
-#define AUX_MU_LSR      (*(volatile uint32_t *)(AUX_BASE + 0x54))
-#define AUX_MU_MSR      (*(volatile uint32_t *)(AUX_BASE + 0x58))
-#define AUX_MU_SCRATCH  (*(volatile uint32_t *)(AUX_BASE + 0x5C))
-#define AUX_MU_CNTL     (*(volatile uint32_t *)(AUX_BASE + 0x60))
-#define AUX_MU_STAT     (*(volatile uint32_t *)(AUX_BASE + 0x64))
-#define AUX_MU_BAUD     (*(volatile uint32_t *)(AUX_BASE + 0x68))
+// PL011 registers
+#define UART_DR         (*(volatile uint32_t *)(UART0_BASE + 0x00))  // Data Register
+#define UART_FR         (*(volatile uint32_t *)(UART0_BASE + 0x18))  // Flag Register
+#define UART_IBRD       (*(volatile uint32_t *)(UART0_BASE + 0x24))  // Integer Baud Rate
+#define UART_FBRD       (*(volatile uint32_t *)(UART0_BASE + 0x28))  // Fractional Baud Rate
+#define UART_LCRH       (*(volatile uint32_t *)(UART0_BASE + 0x2C))  // Line Control
+#define UART_CR         (*(volatile uint32_t *)(UART0_BASE + 0x30))  // Control Register
+#define UART_ICR        (*(volatile uint32_t *)(UART0_BASE + 0x44))  // Interrupt Clear
 
-// LSR bits
-#define AUX_MU_LSR_TX_EMPTY  (1 << 5)
-#define AUX_MU_LSR_RX_READY  (1 << 0)
+// Flag register bits
+#define UART_FR_TXFF    (1 << 5)    // Transmit FIFO Full
+#define UART_FR_RXFE    (1 << 4)    // Receive FIFO Empty
 
-// Delay loop
-static void delay(int count) {
-    while (count--) {
-        asm volatile("nop");
-    }
-}
+// Line control bits
+#define UART_LCRH_WLEN_8BIT (3 << 5)  // 8-bit word length
+#define UART_LCRH_FEN       (1 << 4)  // Enable FIFOs
+
+// Control register bits
+#define UART_CR_UARTEN  (1 << 0)    // UART enable
+#define UART_CR_TXE     (1 << 8)    // Transmit enable
+#define UART_CR_RXE     (1 << 9)    // Receive enable
 
 void hal_serial_init(void) {
-    // Enable Mini UART
-    AUX_ENABLES = 1;
+    // Disable UART while configuring
+    UART_CR = 0;
 
-    // Disable TX/RX while configuring
-    AUX_MU_CNTL = 0;
+    // Clear pending interrupts
+    UART_ICR = 0x7FF;
 
-    // Disable interrupts
-    AUX_MU_IER = 0;
+    // Set baud rate to 115200 (assuming 48MHz UART clock)
+    // Divider = 48000000 / (16 * 115200) = 26.042
+    // Integer part = 26, Fractional part = 0.042 * 64 = 2.688 ~ 3
+    UART_IBRD = 26;
+    UART_FBRD = 3;
 
-    // 8-bit mode
-    AUX_MU_LCR = 3;
+    // 8 bits, no parity, 1 stop bit, enable FIFOs
+    UART_LCRH = UART_LCRH_WLEN_8BIT | UART_LCRH_FEN;
 
-    // RTS high (we don't use flow control)
-    AUX_MU_MCR = 0;
-
-    // Set baud rate
-    // Baud = system_clock / (8 * (AUX_MU_BAUD + 1))
-    // For 250MHz core clock and 115200 baud: 250000000 / (8 * 115200) - 1 = 270
-    AUX_MU_BAUD = 270;
-
-    // Clear FIFOs
-    AUX_MU_IIR = 0xC6;
-
-    // Set GPIO 14 and 15 to ALT5 (Mini UART)
-    // GPFSEL1 controls GPIO 10-19
-    // GPIO 14 = bits 12-14 = ALT5 (010)
-    // GPIO 15 = bits 15-17 = ALT5 (010)
-    uint32_t sel = GPFSEL1;
-    sel &= ~(7 << 12);  // Clear GPIO 14
-    sel &= ~(7 << 15);  // Clear GPIO 15
-    sel |= (2 << 12);   // ALT5 for GPIO 14
-    sel |= (2 << 15);   // ALT5 for GPIO 15
-    GPFSEL1 = sel;
-
-    // Disable pull-up/pull-down on GPIO 14, 15
-    GPPUD = 0;
-    delay(150);
-    GPPUDCLK0 = (1 << 14) | (1 << 15);
-    delay(150);
-    GPPUDCLK0 = 0;
-
-    // Enable TX and RX
-    AUX_MU_CNTL = 3;
+    // Enable UART, TX and RX
+    UART_CR = UART_CR_UARTEN | UART_CR_TXE | UART_CR_RXE;
 }
 
 void hal_serial_putc(char c) {
-    // Wait for TX to be empty
-    while (!(AUX_MU_LSR & AUX_MU_LSR_TX_EMPTY)) {
+    // Wait until transmit FIFO is not full
+    while (UART_FR & UART_FR_TXFF) {
         asm volatile("nop");
     }
-    AUX_MU_IO = c;
+    UART_DR = c;
 }
 
 int hal_serial_getc(void) {
-    // Check if data available
-    if (!(AUX_MU_LSR & AUX_MU_LSR_RX_READY)) {
+    // Return -1 if no data available
+    if (UART_FR & UART_FR_RXFE) {
         return -1;
     }
-    return AUX_MU_IO & 0xFF;
+    return UART_DR & 0xFF;
 }

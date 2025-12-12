@@ -34,7 +34,7 @@ typedef struct {
 
 static void printf_putchar(char c, void *ctx) {
     (void)ctx;
-#ifdef TARGET_QEMU
+#ifdef PRINTF_UART
     if (c == '\n') uart_putc('\r');
     uart_putc(c);
 #else

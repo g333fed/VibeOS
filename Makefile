@@ -45,6 +45,13 @@ else
     CFLAGS_TARGET = -DTARGET_QEMU
 endif
 
+# Printf output: uart (default) or screen
+# Override with: make PRINTF=screen
+PRINTF ?= uart
+ifeq ($(PRINTF),uart)
+    CFLAGS_TARGET += -DPRINTF_UART
+endif
+
 # Source files
 KERNEL_C_SRCS = $(wildcard $(KERNEL_DIR)/*.c)
 KERNEL_S_SRCS = $(wildcard $(KERNEL_DIR)/*.S)
@@ -251,6 +258,11 @@ run: $(BUILD_DIR)/vibeos.bin install-user
 
 run-nographic: $(BUILD_DIR)/vibeos.bin $(DISK_IMG)
 	$(QEMU) $(QEMU_FLAGS_NOGRAPHIC)
+
+# Run Pi build in QEMU raspi3b with USB keyboard
+run-pi:
+	$(MAKE) TARGET=pi
+	$(QEMU) -M raspi3b -kernel build/kernel8.img -serial stdio -usb -device usb-kbd
 
 debug: $(BUILD_DIR)/vibeos.bin
 	$(QEMU) $(QEMU_FLAGS) -S -s

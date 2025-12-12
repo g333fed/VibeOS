@@ -341,14 +341,27 @@ static inline void dsb(void) {
 }
 
 static void usleep(uint32_t us) {
-    uint32_t count = us * 333;  // ~1GHz clock, ~3 cycles per iteration
-    while (count--) {
-        asm volatile("nop");
-    }
+    // Use ARM generic timer for accurate delays
+    uint64_t freq, start, target;
+    asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
+    asm volatile("mrs %0, cntpct_el0" : "=r"(start));
+    target = start + (freq * us / 1000000);
+    uint64_t now;
+    do {
+        asm volatile("mrs %0, cntpct_el0" : "=r"(now));
+    } while (now < target);
 }
 
 static void msleep(uint32_t ms) {
-    usleep(ms * 1000);
+    // Use ARM generic timer for accurate delays
+    uint64_t freq, start, target;
+    asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
+    asm volatile("mrs %0, cntpct_el0" : "=r"(start));
+    target = start + (freq * ms / 1000);
+    uint64_t now;
+    do {
+        asm volatile("mrs %0, cntpct_el0" : "=r"(now));
+    } while (now < target);
 }
 
 // ============================================================================
@@ -427,7 +440,12 @@ static int usb_set_power(int on) {
 static int usb_core_reset(void) {
     usb_debug("[USB] Core reset...\n");
 
+    usb_debug("[USB] Reading GRSTCTL...\n");
+    uint32_t val = GRSTCTL;
+    usb_debug("[USB] GRSTCTL = %08x\n", val);
+
     // Wait for AHB master idle
+    usb_debug("[USB] Waiting for AHB idle...\n");
     int timeout = 100000;
     while (!(GRSTCTL & GRSTCTL_AHBIDLE) && timeout--) {
         usleep(1);
@@ -436,12 +454,16 @@ static int usb_core_reset(void) {
         printf("[USB] Timeout waiting for AHB idle\n");
         return -1;
     }
+    usb_debug("[USB] AHB idle OK\n");
 
     // Trigger core soft reset
+    usb_debug("[USB] Triggering soft reset...\n");
     GRSTCTL = GRSTCTL_CSFTRST;
     dsb();
+    usb_debug("[USB] Soft reset triggered\n");
 
     // Wait for reset to complete (hardware clears the bit)
+    usb_debug("[USB] Waiting for reset complete...\n");
     timeout = 100000;
     while ((GRSTCTL & GRSTCTL_CSFTRST) && timeout--) {
         usleep(1);
@@ -450,8 +472,10 @@ static int usb_core_reset(void) {
         printf("[USB] Timeout waiting for reset complete\n");
         return -1;
     }
+    usb_debug("[USB] Reset complete\n");
 
     // Wait for AHB idle again
+    usb_debug("[USB] Waiting for AHB idle again...\n");
     timeout = 100000;
     while (!(GRSTCTL & GRSTCTL_AHBIDLE) && timeout--) {
         usleep(1);
@@ -460,8 +484,10 @@ static int usb_core_reset(void) {
         printf("[USB] Timeout waiting for AHB idle after reset\n");
         return -1;
     }
+    usb_debug("[USB] AHB idle again OK\n");
 
     // Wait a bit for things to settle
+    usb_debug("[USB] Settling...\n");
     msleep(100);
 
     usb_debug("[USB] Core reset complete\n");
@@ -1228,7 +1254,9 @@ int hal_usb_init(void) {
     }
 
     // Give power time to stabilize
+    printf("[USB] Waiting 100ms for power stabilize...\n");
     msleep(100);
+    printf("[USB] Power stabilized, starting core reset...\n");
 
     // Core reset
     if (usb_core_reset() < 0) {

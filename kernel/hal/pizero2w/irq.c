@@ -240,9 +240,10 @@ static void on_timer_tick(void) {
 
     led_toggle();
 
-    if (tick_count % 10 == 0) {
-        printf("Interrupt! count=%llu\n", tick_count);
-    }
+    // Disabled for debugging - too noisy
+    // if (tick_count % 10 == 0) {
+    //     printf("Interrupt! count=%llu\n", tick_count);
+    // }
 }
 
 /* ========== Public HAL interface ========== */
