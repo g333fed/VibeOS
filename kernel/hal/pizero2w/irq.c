@@ -86,7 +86,7 @@ static const uint8_t bank2_fast_irqs[] = { 21, 22, 23, 24, 25, 30 };
 #define IRQ_VC_USB          (8 + 9) /* USB is bank1 IRQ 9 */
 
 static void (*dispatch_table[TOTAL_IRQS])(void);
-static uint32_t tick_period_ms = 100;
+static uint32_t tick_period_ms = 1;  // 1ms = 1000Hz polling (USB spec max)
 static uint64_t tick_count = 0;
 
 /* Count trailing zeros - returns bit position of lowest set bit, or 32 if zero */
