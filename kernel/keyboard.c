@@ -8,6 +8,7 @@
 #include "keyboard.h"
 #include "printf.h"
 #include "string.h"
+#include "hal/hal.h"
 
 // Virtio MMIO registers
 #define VIRTIO_MMIO_BASE        0x0a000000
@@ -509,11 +510,37 @@ static void process_events(void) {
 }
 
 int keyboard_has_key(void) {
+    // If no virtio keyboard, use HAL (USB keyboard on Pi)
+    if (!kbd_base) {
+        int c = hal_keyboard_getc();
+        if (c >= 0) {
+            // Put it back in our buffer so keyboard_getc can get it
+            int next = (key_buf_write + 1) % KEY_BUF_SIZE;
+            if (next != key_buf_read) {
+                key_buffer[key_buf_write] = c;
+                key_buf_write = next;
+            }
+        }
+        return key_buf_read != key_buf_write;
+    }
+
     process_events();
     return key_buf_read != key_buf_write;
 }
 
 int keyboard_getc(void) {
+    // If no virtio keyboard, use HAL (USB keyboard on Pi)
+    if (!kbd_base) {
+        // First check our buffer (from keyboard_has_key)
+        if (key_buf_read != key_buf_write) {
+            int c = key_buffer[key_buf_read];
+            key_buf_read = (key_buf_read + 1) % KEY_BUF_SIZE;
+            return c;
+        }
+        // Then poll HAL directly
+        return hal_keyboard_getc();
+    }
+
     process_events();
 
     if (key_buf_read == key_buf_write) {

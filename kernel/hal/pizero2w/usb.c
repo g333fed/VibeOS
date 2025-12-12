@@ -14,12 +14,20 @@
 #include "../../string.h"
 #include "../../memory.h"
 
-// Debug output
-#define USB_DEBUG
-#ifdef USB_DEBUG
+// Debug output levels
+// 0 = errors only, 1 = key events, 2 = verbose
+#define USB_DEBUG_LEVEL 1
+
+#if USB_DEBUG_LEVEL >= 2
 #define usb_debug(...) printf(__VA_ARGS__)
 #else
 #define usb_debug(...) ((void)0)
+#endif
+
+#if USB_DEBUG_LEVEL >= 1
+#define usb_info(...) printf(__VA_ARGS__)
+#else
+#define usb_info(...) ((void)0)
 #endif
 
 // Peripheral base for Pi Zero 2W (BCM2710)
@@ -311,22 +319,94 @@ typedef struct {
 #define USB_HID_PROTOCOL_KEYBOARD   1
 #define USB_HID_PROTOCOL_MOUSE      2
 
+// USB Hub class
+#define USB_CLASS_HUB               9
+
+// Hub descriptor
+typedef struct {
+    uint8_t  bLength;
+    uint8_t  bDescriptorType;
+    uint8_t  bNbrPorts;
+    uint16_t wHubCharacteristics;
+    uint8_t  bPwrOn2PwrGood;        // Time in 2ms intervals
+    uint8_t  bHubContrCurrent;
+    uint8_t  DeviceRemovable[8];    // Variable length, max 8 bytes for 64 ports
+} __attribute__((packed)) usb_hub_descriptor_t;
+
+// Hub class requests
+#define USB_REQ_GET_HUB_STATUS      0
+#define USB_REQ_GET_PORT_STATUS     0
+#define USB_REQ_SET_PORT_FEATURE    3
+#define USB_REQ_CLEAR_PORT_FEATURE  1
+
+// Hub port features
+#define USB_PORT_FEAT_CONNECTION    0
+#define USB_PORT_FEAT_ENABLE        1
+#define USB_PORT_FEAT_SUSPEND       2
+#define USB_PORT_FEAT_OVER_CURRENT  3
+#define USB_PORT_FEAT_RESET         4
+#define USB_PORT_FEAT_POWER         8
+#define USB_PORT_FEAT_LOWSPEED      9
+#define USB_PORT_FEAT_C_CONNECTION  16
+#define USB_PORT_FEAT_C_ENABLE      17
+#define USB_PORT_FEAT_C_SUSPEND     18
+#define USB_PORT_FEAT_C_OVER_CURRENT 19
+#define USB_PORT_FEAT_C_RESET       20
+
+// Hub port status bits
+#define USB_PORT_STAT_CONNECTION    (1 << 0)
+#define USB_PORT_STAT_ENABLE        (1 << 1)
+#define USB_PORT_STAT_SUSPEND       (1 << 2)
+#define USB_PORT_STAT_OVERCURRENT   (1 << 3)
+#define USB_PORT_STAT_RESET         (1 << 4)
+#define USB_PORT_STAT_POWER         (1 << 8)
+#define USB_PORT_STAT_LOW_SPEED     (1 << 9)
+#define USB_PORT_STAT_HIGH_SPEED    (1 << 10)
+
+// Hub descriptor type
+#define USB_DESC_HUB                0x29
+
 // ============================================================================
 // Driver State
 // ============================================================================
+
+// USB device info
+typedef struct {
+    int address;
+    int speed;                  // 0=HS, 1=FS, 2=LS
+    int max_packet_size;
+    int is_hub;
+    int hub_ports;              // Number of ports if hub
+    int parent_hub;             // Address of parent hub (0 = root)
+    int parent_port;            // Port on parent hub
+} usb_device_t;
+
+#define MAX_USB_DEVICES 8
 
 static struct {
     int initialized;
     int num_channels;
     int device_connected;
     int device_speed;           // 0=HS, 1=FS, 2=LS
-    int device_address;
-    int max_packet_size;
+    int next_address;           // Next address to assign
     uint8_t data_toggle[16];    // Data toggle for each endpoint
+
+    // Device tracking
+    usb_device_t devices[MAX_USB_DEVICES];
+    int num_devices;
+
+    // Keyboard info (if found)
+    int keyboard_addr;
+    int keyboard_ep;            // Interrupt endpoint
+    int keyboard_mps;           // Max packet size for interrupt EP
+    int keyboard_interval;      // Polling interval
 } usb_state = {0};
 
 // Mailbox buffer (16-byte aligned)
 static volatile uint32_t __attribute__((aligned(16))) mbox_buf[36];
+
+// DMA buffer for USB transfers (32-byte aligned for cache, 512 bytes for max transfer)
+static uint8_t __attribute__((aligned(32))) dma_buffer[512];
 
 // ============================================================================
 // Helper Functions
@@ -604,10 +684,12 @@ static int usb_init_host(void) {
     HFIR = 60000;
     dsb();
 
-    // Configure AHB (no DMA for now, use slave mode)
-    // Don't enable global interrupts yet - we're polling
-    GAHBCFG = 0;
+    // Configure AHB for DMA mode
+    // QEMU's DWC2 emulation only supports DMA mode, not slave mode
+    // DMA_EN = bit 5, also set AHB_SINGLE for single-beat AHB bursts
+    GAHBCFG = GAHBCFG_DMA_EN;
     dsb();
+    usb_debug("[USB] DMA mode enabled (GAHBCFG=%08x)\n", GAHBCFG);
 
     // Clear all pending interrupts
     GINTSTS = 0xFFFFFFFF;
@@ -684,7 +766,7 @@ static int usb_port_reset(void) {
     // Get device speed
     usb_state.device_speed = (hprt & HPRT0_PRTSPD_MASK) >> HPRT0_PRTSPD_SHIFT;
     const char *speed_str[] = {"High", "Full", "Low"};
-    usb_debug("[USB] Device speed: %s\n", speed_str[usb_state.device_speed]);
+    usb_info("[USB] Device speed: %s\n", speed_str[usb_state.device_speed]);
 
     // Configure HCFG and HFIR based on PHY type
     // Pi uses UTMI+ PHY which runs at 60MHz, even for FS/LS devices
@@ -753,16 +835,11 @@ static void usb_halt_channel(int ch) {
     HCINT(ch) = 0xFFFFFFFF;
 }
 
-// GRXSTSP packet status values
-#define GRXSTS_PKTSTS_IN_DATA       2
-#define GRXSTS_PKTSTS_IN_COMPLETE   3
-#define GRXSTS_PKTSTS_TOGGLE_ERR    5
-#define GRXSTS_PKTSTS_CH_HALTED     7
 
-// Wait for channel to complete, handling NAKs with retries
-static int usb_wait_for_channel(int ch, int max_retries) {
+// Wait for DMA transfer to complete
+static int usb_wait_for_dma_complete(int ch, int max_retries) {
     for (int retry = 0; retry < max_retries; retry++) {
-        int timeout = 50000;
+        int timeout = 100000;
         while (timeout--) {
             uint32_t hcint = HCINT(ch);
 
@@ -770,42 +847,67 @@ static int usb_wait_for_channel(int ch, int max_retries) {
                 HCINT(ch) = 0xFFFFFFFF;
                 return 0;  // Success
             }
+            if (hcint & HCINT_CHHLTD) {
+                // Channel halted - check why
+                if (hcint & (HCINT_XFERCOMPL | HCINT_ACK)) {
+                    HCINT(ch) = 0xFFFFFFFF;
+                    return 0;  // Transfer actually completed
+                }
+                if (hcint & HCINT_NAK) {
+                    // NAK - need to retry
+                    HCINT(ch) = 0xFFFFFFFF;
+                    break;  // Break to retry loop
+                }
+                if (hcint & (HCINT_STALL | HCINT_XACTERR | HCINT_BBLERR | HCINT_AHBERR)) {
+                    usb_debug("[USB] Transfer error: hcint=%08x\n", hcint);
+                    HCINT(ch) = 0xFFFFFFFF;
+                    return -1;
+                }
+                // Other halt reason - assume done
+                HCINT(ch) = 0xFFFFFFFF;
+                return 0;
+            }
+            if (hcint & HCINT_AHBERR) {
+                usb_debug("[USB] AHB error (bad DMA address?)\n");
+                HCINT(ch) = 0xFFFFFFFF;
+                return -1;
+            }
             if (hcint & HCINT_STALL) {
                 usb_debug("[USB] STALL\n");
                 HCINT(ch) = 0xFFFFFFFF;
                 return -1;
             }
-            if (hcint & HCINT_XACTERR) {
-                usb_debug("[USB] Transaction error (hcint=%08x)\n", hcint);
+            if (hcint & HCINT_BBLERR) {
+                usb_debug("[USB] Babble error\n");
                 HCINT(ch) = 0xFFFFFFFF;
                 return -1;
             }
-            if (hcint & HCINT_NAK) {
-                // NAK - need to retry
-                HCINT(ch) = HCINT_NAK;  // Clear NAK
-                break;  // Break inner loop, retry
-            }
-            if (hcint & HCINT_CHHLTD) {
+            if (hcint & HCINT_XACTERR) {
+                usb_debug("[USB] Transaction error\n");
                 HCINT(ch) = 0xFFFFFFFF;
-                return 0;  // Channel halted, might be OK
+                return -1;
             }
+
             usleep(1);
         }
 
         if (retry < max_retries - 1) {
+            usb_debug("[USB] Retry %d/%d\n", retry + 1, max_retries);
             // Re-enable channel for retry
             uint32_t hcchar = HCCHAR(ch);
-            HCCHAR(ch) = hcchar | HCCHAR_CHENA;
+            hcchar |= HCCHAR_CHENA;
+            hcchar &= ~HCCHAR_CHDIS;
+            HCCHAR(ch) = hcchar;
             dsb();
-            usleep(1000);  // Small delay between retries
+            usleep(1000);
         }
     }
 
-    usb_debug("[USB] Max retries exceeded\n");
+    usb_debug("[USB] Transfer timeout after %d retries\n", max_retries);
     return -1;
 }
 
-// Control transfer (SETUP + optional DATA + STATUS)
+// Control transfer using DMA (SETUP + optional DATA + STATUS)
 static int usb_control_transfer(int device_addr, usb_setup_packet_t *setup,
                                 void *data, int data_len, int data_in) {
     int ch = 0;  // Use channel 0 for control
@@ -817,57 +919,70 @@ static int usb_control_transfer(int device_addr, usb_setup_packet_t *setup,
     // Halt channel if active
     usb_halt_channel(ch);
 
-    // Clear all channel interrupts
-    HCINT(ch) = 0xFFFFFFFF;
-
-    // Enable all interrupts for this channel
-    HCINTMSK(ch) = HCINT_XFERCOMPL | HCINT_CHHLTD | HCINT_STALL |
-                   HCINT_NAK | HCINT_ACK | HCINT_XACTERR | HCINT_DATATGLERR;
-
     // Configure channel for control endpoint
-    // For initial enumeration (addr 0), use 64 for Full Speed, 8 for Low Speed
-    // Full Speed devices can send up to 64 bytes per packet - using 8 causes babble errors
-    uint32_t mps;
+    // Look up device to get MPS and speed
+    uint32_t mps = 64;  // Default for FS/HS
+    int dev_speed = usb_state.device_speed;
+
     if (device_addr == 0) {
         mps = (usb_state.device_speed == 2) ? 8 : 64;  // LS=8, FS/HS=64
     } else {
-        mps = usb_state.max_packet_size;
+        // Find device in our list
+        for (int i = 0; i < usb_state.num_devices; i++) {
+            if (usb_state.devices[i].address == device_addr) {
+                mps = usb_state.devices[i].max_packet_size;
+                dev_speed = usb_state.devices[i].speed;
+                break;
+            }
+        }
         if (mps == 0) mps = 64;
     }
 
-    uint32_t hcchar = (mps & HCCHAR_MPS_MASK) |
-                      (0 << HCCHAR_EPNUM_SHIFT) |         // EP0
-                      (HCCHAR_EPTYPE_CTRL << HCCHAR_EPTYPE_SHIFT) |
-                      (device_addr << HCCHAR_DEVADDR_SHIFT) |
-                      (1 << HCCHAR_MC_SHIFT);             // 1 transaction per frame
+    uint32_t hcchar_base = (mps & HCCHAR_MPS_MASK) |
+                           (0 << HCCHAR_EPNUM_SHIFT) |         // EP0
+                           (HCCHAR_EPTYPE_CTRL << HCCHAR_EPTYPE_SHIFT) |
+                           (device_addr << HCCHAR_DEVADDR_SHIFT) |
+                           (1 << HCCHAR_MC_SHIFT);             // 1 transaction per frame
 
-    if (usb_state.device_speed == 2) {  // Low-speed
-        hcchar |= HCCHAR_LSDEV;
+    if (dev_speed == 2) {  // Low-speed
+        hcchar_base |= HCCHAR_LSDEV;
     }
 
-    // ========== SETUP Stage ==========
-    usb_debug("[USB] SETUP stage...\n");
+    // ========== SETUP Stage (DMA) ==========
+    usb_debug("[USB] SETUP stage (DMA)...\n");
+
+    // Copy SETUP packet to DMA buffer
+    memcpy(dma_buffer, setup, 8);
+    dsb();
+
+    // Clear all channel interrupts
+    HCINT(ch) = 0xFFFFFFFF;
+
+    // Enable interrupts for this channel
+    HCINTMSK(ch) = HCINT_XFERCOMPL | HCINT_CHHLTD | HCINT_STALL |
+                   HCINT_NAK | HCINT_ACK | HCINT_XACTERR | HCINT_BBLERR | HCINT_AHBERR;
+
+    // Set DMA address (bus address)
+    HCDMA(ch) = arm_to_bus(dma_buffer);
+    dsb();
 
     // Configure channel (OUT direction for SETUP)
-    HCCHAR(ch) = hcchar;
+    HCCHAR(ch) = hcchar_base;
     dsb();
 
     // Transfer size: 8 bytes, 1 packet, SETUP PID
     HCTSIZ(ch) = 8 | (1 << HCTSIZ_PKTCNT_SHIFT) | (HCTSIZ_PID_SETUP << HCTSIZ_PID_SHIFT);
     dsb();
 
-    // Write SETUP packet to FIFO first (before enabling channel)
-    uint32_t *setup32 = (uint32_t *)setup;
-    FIFO(ch) = setup32[0];
-    FIFO(ch) = setup32[1];
-    dsb();
+    usb_debug("[USB] SETUP: HCDMA=%08x HCCHAR=%08x HCTSIZ=%08x\n",
+              HCDMA(ch), HCCHAR(ch), HCTSIZ(ch));
 
-    // Now enable channel to start the transfer
-    HCCHAR(ch) = hcchar | HCCHAR_CHENA;
+    // Enable channel to start the transfer
+    HCCHAR(ch) = hcchar_base | HCCHAR_CHENA;
     dsb();
 
     // Wait for SETUP completion
-    if (usb_wait_for_channel(ch, 3) < 0) {
+    if (usb_wait_for_dma_complete(ch, 5) < 0) {
         usb_debug("[USB] SETUP failed\n");
         return -1;
     }
@@ -877,164 +992,71 @@ static int usb_control_transfer(int device_addr, usb_setup_packet_t *setup,
     int bytes_transferred = 0;
 
     if (data_len > 0 && data != NULL) {
-        usb_debug("[USB] DATA stage (%d bytes)...\n", data_len);
+        usb_debug("[USB] DATA stage (%d bytes, %s)...\n", data_len, data_in ? "IN" : "OUT");
+
+        if (data_len > (int)sizeof(dma_buffer)) {
+            usb_debug("[USB] Data too large for DMA buffer\n");
+            return -1;
+        }
 
         // Configure for data direction
-        uint32_t data_hcchar = hcchar;
+        uint32_t data_hcchar = hcchar_base;
         if (data_in) {
             data_hcchar |= HCCHAR_EPDIR;  // IN
+            // Clear DMA buffer for IN transfer
+            memset(dma_buffer, 0, data_len);
+        } else {
+            // Copy data to DMA buffer for OUT transfer
+            memcpy(dma_buffer, data, data_len);
         }
+        dsb();
 
         // Calculate packet count
         int pkt_count = (data_len + mps - 1) / mps;
+        if (pkt_count == 0) pkt_count = 1;
 
         // Clear interrupts
         HCINT(ch) = 0xFFFFFFFF;
+
+        // Set DMA address
+        HCDMA(ch) = arm_to_bus(dma_buffer);
+        dsb();
 
         // Configure channel
         HCCHAR(ch) = data_hcchar;
         dsb();
 
-        // Transfer size, packet count, DATA1 PID (first data packet after SETUP is always DATA1)
+        // Transfer size, packet count, DATA1 PID (first data after SETUP is always DATA1)
         HCTSIZ(ch) = data_len | (pkt_count << HCTSIZ_PKTCNT_SHIFT) |
                      (HCTSIZ_PID_DATA1 << HCTSIZ_PID_SHIFT);
         dsb();
 
-        if (data_in) {
-            // IN transfer - enable channel, then read data from FIFO
-            HCCHAR(ch) = data_hcchar | HCCHAR_CHENA;
-            dsb();
+        usb_debug("[USB] DATA: HCDMA=%08x HCCHAR=%08x HCTSIZ=%08x\n",
+                  HCDMA(ch), HCCHAR(ch), HCTSIZ(ch));
 
-            usb_debug("[USB] DATA IN: HCCHAR=%08x HCTSIZ=%08x\n", HCCHAR(ch), HCTSIZ(ch));
+        // Enable channel
+        HCCHAR(ch) = data_hcchar | HCCHAR_CHENA;
+        dsb();
 
-            // Wait and read data as it arrives
-            int timeout = 100000;
-            int done = 0;
-            int nak_count = 0;
-            int last_print = 0;
-            while (!done && timeout--) {
-                uint32_t gintsts = GINTSTS;
-                uint32_t hcint = HCINT(ch);
-
-                // Print status periodically
-                if (timeout % 10000 == 0 && timeout != last_print) {
-                    usb_debug("[USB] Waiting: GINTSTS=%08x HCINT=%08x HCCHAR=%08x\n",
-                              gintsts, hcint, HCCHAR(ch));
-                    last_print = timeout;
-                }
-
-                // Check for RxFIFO data
-                if (gintsts & GINTSTS_RXFLVL) {
-                    uint32_t grxsts = GRXSTSP;  // Pop and read status
-                    int pktsts = (grxsts >> 17) & 0xF;
-                    int bcnt = (grxsts >> 4) & 0x7FF;
-                    int ch_num = grxsts & 0xF;
-
-                    usb_debug("[USB] RX: grxsts=%08x ch=%d pktsts=%d bcnt=%d\n", grxsts, ch_num, pktsts, bcnt);
-
-                    if (pktsts == GRXSTS_PKTSTS_IN_DATA && bcnt > 0) {
-                        // Read data from FIFO
-                        int words = (bcnt + 3) / 4;
-                        uint32_t *data32 = (uint32_t *)((uint8_t *)data + bytes_transferred);
-                        for (int i = 0; i < words; i++) {
-                            data32[i] = FIFO(ch_num);
-                        }
-                        bytes_transferred += bcnt;
-                        usb_debug("[USB] Read %d bytes (total %d)\n", bcnt, bytes_transferred);
-                    } else if (pktsts == GRXSTS_PKTSTS_IN_COMPLETE) {
-                        // Transfer complete indication - re-enable channel for next packet if needed
-                        usb_debug("[USB] IN complete indication\n");
-
-                        // Check if we need more data and channel isn't done
-                        if (bytes_transferred < data_len && !(HCINT(ch) & HCINT_XFERCOMPL)) {
-                            // Re-enable channel to receive next packet
-                            HCCHAR(ch) = data_hcchar | HCCHAR_CHENA;
-                            dsb();
-                        }
-                    }
-                }
-
-                // Check channel interrupt
-                if (hcint & HCINT_XFERCOMPL) {
-                    usb_debug("[USB] XFERCOMPL\n");
-                    HCINT(ch) = HCINT_XFERCOMPL;
-                    done = 1;
-                }
-                if (hcint & HCINT_CHHLTD) {
-                    usb_debug("[USB] Channel halted, hcint=%08x\n", hcint);
-                    HCINT(ch) = HCINT_CHHLTD;
-                    // Check if transfer actually completed
-                    if (bytes_transferred >= data_len || (HCTSIZ(ch) & HCTSIZ_XFERSIZE_MASK) == 0) {
-                        done = 1;
-                    } else {
-                        // Need more data, re-enable channel
-                        HCCHAR(ch) = data_hcchar | HCCHAR_CHENA;
-                        dsb();
-                    }
-                }
-                if (hcint & HCINT_BBLERR) {
-                    usb_debug("[USB] Babble error - frame timing issue\n");
-                    HCINT(ch) = 0xFFFFFFFF;
-                    return -1;
-                }
-                if (hcint & (HCINT_STALL | HCINT_XACTERR)) {
-                    usb_debug("[USB] DATA IN error: hcint=%08x\n", hcint);
-                    HCINT(ch) = 0xFFFFFFFF;
-                    return -1;
-                }
-                if (hcint & HCINT_NAK) {
-                    nak_count++;
-                    HCINT(ch) = HCINT_NAK;
-                    if (nak_count < 1000) {
-                        // Re-enable channel for retry
-                        HCCHAR(ch) = data_hcchar | HCCHAR_CHENA;
-                        dsb();
-                    } else if (nak_count == 1000) {
-                        usb_debug("[USB] Too many NAKs (%d)\n", nak_count);
-                    }
-                }
-                if (hcint & HCINT_ACK) {
-                    usb_debug("[USB] ACK received\n");
-                    HCINT(ch) = HCINT_ACK;
-
-                    // After ACK, re-enable channel for next packet if transfer not complete
-                    if (bytes_transferred < data_len && !(HCINT(ch) & HCINT_XFERCOMPL)) {
-                        HCCHAR(ch) = data_hcchar | HCCHAR_CHENA;
-                        dsb();
-                    }
-                }
-
-                usleep(1);
-            }
-
-            if (timeout <= 0) {
-                usb_debug("[USB] DATA IN timeout (nak_count=%d)\n", nak_count);
-                usb_debug("[USB] Final: GINTSTS=%08x HCINT=%08x HCCHAR=%08x HCTSIZ=%08x\n",
-                          GINTSTS, HCINT(ch), HCCHAR(ch), HCTSIZ(ch));
-                return -1;
-            }
-        } else {
-            // OUT transfer - write data to FIFO, then enable channel
-            uint32_t *data32 = (uint32_t *)data;
-            int words = (data_len + 3) / 4;
-            for (int i = 0; i < words; i++) {
-                FIFO(ch) = data32[i];
-            }
-            dsb();
-
-            // Enable channel
-            HCCHAR(ch) = data_hcchar | HCCHAR_CHENA;
-            dsb();
-
-            // Wait for completion
-            if (usb_wait_for_channel(ch, 3) < 0) {
-                usb_debug("[USB] DATA OUT failed\n");
-                return -1;
-            }
-            bytes_transferred = data_len;
+        // Wait for completion
+        if (usb_wait_for_dma_complete(ch, 10) < 0) {
+            usb_debug("[USB] DATA stage failed\n");
+            return -1;
         }
 
-        usb_debug("[USB] DATA complete (%d bytes)\n", bytes_transferred);
+        if (data_in) {
+            // Copy received data from DMA buffer
+            // Calculate actual bytes received from HCTSIZ
+            uint32_t remaining = HCTSIZ(ch) & HCTSIZ_XFERSIZE_MASK;
+            bytes_transferred = data_len - remaining;
+            if (bytes_transferred > 0) {
+                memcpy(data, dma_buffer, bytes_transferred);
+            }
+            usb_debug("[USB] DATA IN: received %d bytes\n", bytes_transferred);
+        } else {
+            bytes_transferred = data_len;
+            usb_debug("[USB] DATA OUT: sent %d bytes\n", bytes_transferred);
+        }
     }
 
     // ========== STATUS Stage ==========
@@ -1043,13 +1065,17 @@ static int usb_control_transfer(int device_addr, usb_setup_packet_t *setup,
     // Status is opposite direction of data (or IN if no data)
     int status_in = (data_len > 0) ? !data_in : 1;
 
-    uint32_t status_hcchar = hcchar;
+    uint32_t status_hcchar = hcchar_base;
     if (status_in) {
         status_hcchar |= HCCHAR_EPDIR;
     }
 
     // Clear interrupts
     HCINT(ch) = 0xFFFFFFFF;
+
+    // Set DMA address (zero-length, but still need valid address)
+    HCDMA(ch) = arm_to_bus(dma_buffer);
+    dsb();
 
     // Configure channel
     HCCHAR(ch) = status_hcchar;
@@ -1059,41 +1085,17 @@ static int usb_control_transfer(int device_addr, usb_setup_packet_t *setup,
     HCTSIZ(ch) = 0 | (1 << HCTSIZ_PKTCNT_SHIFT) | (HCTSIZ_PID_DATA1 << HCTSIZ_PID_SHIFT);
     dsb();
 
+    usb_debug("[USB] STATUS: HCDMA=%08x HCCHAR=%08x HCTSIZ=%08x\n",
+              HCDMA(ch), HCCHAR(ch), HCTSIZ(ch));
+
     // Enable channel
     HCCHAR(ch) = status_hcchar | HCCHAR_CHENA;
     dsb();
 
-    // For IN status, we need to drain any RxFIFO data
-    if (status_in) {
-        int timeout = 50000;
-        while (timeout--) {
-            if (GINTSTS & GINTSTS_RXFLVL) {
-                uint32_t grxsts = GRXSTSP;  // Pop and discard
-                (void)grxsts;
-            }
-            uint32_t hcint = HCINT(ch);
-            if (hcint & (HCINT_XFERCOMPL | HCINT_CHHLTD)) {
-                HCINT(ch) = 0xFFFFFFFF;
-                break;
-            }
-            if (hcint & (HCINT_STALL | HCINT_XACTERR)) {
-                usb_debug("[USB] STATUS error: hcint=%08x\n", hcint);
-                HCINT(ch) = 0xFFFFFFFF;
-                return -1;
-            }
-            if (hcint & HCINT_NAK) {
-                HCINT(ch) = HCINT_NAK;
-                HCCHAR(ch) = status_hcchar | HCCHAR_CHENA;
-                dsb();
-            }
-            usleep(1);
-        }
-    } else {
-        // OUT status
-        if (usb_wait_for_channel(ch, 3) < 0) {
-            usb_debug("[USB] STATUS OUT failed\n");
-            return -1;
-        }
+    // Wait for completion
+    if (usb_wait_for_dma_complete(ch, 5) < 0) {
+        usb_debug("[USB] STATUS failed\n");
+        return -1;
     }
 
     usb_debug("[USB] Control transfer complete, %d bytes\n", bytes_transferred);
@@ -1152,51 +1154,205 @@ static int usb_get_configuration_descriptor(int addr, uint8_t *buf, int len) {
     return usb_control_transfer(addr, &setup, buf, len, 1);
 }
 
-static int usb_enumerate_device(void) {
-    usb_debug("[USB] Enumerating device...\n");
+// Forward declaration for recursive enumeration
+static int usb_enumerate_device_at(int parent_addr, int port, int speed);
 
-    // First, get device descriptor with address 0 (limited to 8 bytes initially)
+// Get hub descriptor
+static int usb_get_hub_descriptor(int addr, usb_hub_descriptor_t *desc) {
+    usb_setup_packet_t setup = {
+        .bmRequestType = 0xA0,  // Device to host, class, device
+        .bRequest = USB_REQ_GET_DESCRIPTOR,
+        .wValue = (USB_DESC_HUB << 8) | 0,
+        .wIndex = 0,
+        .wLength = sizeof(usb_hub_descriptor_t)
+    };
+
+    return usb_control_transfer(addr, &setup, desc, sizeof(usb_hub_descriptor_t), 1);
+}
+
+// Get hub port status
+static int usb_get_port_status(int hub_addr, int port, uint32_t *status) {
+    usb_setup_packet_t setup = {
+        .bmRequestType = 0xA3,  // Device to host, class, other (port)
+        .bRequest = USB_REQ_GET_PORT_STATUS,
+        .wValue = 0,
+        .wIndex = port,
+        .wLength = 4
+    };
+
+    return usb_control_transfer(hub_addr, &setup, status, 4, 1);
+}
+
+// Set hub port feature
+static int usb_set_port_feature(int hub_addr, int port, int feature) {
+    usb_setup_packet_t setup = {
+        .bmRequestType = 0x23,  // Host to device, class, other (port)
+        .bRequest = USB_REQ_SET_PORT_FEATURE,
+        .wValue = feature,
+        .wIndex = port,
+        .wLength = 0
+    };
+
+    return usb_control_transfer(hub_addr, &setup, NULL, 0, 0);
+}
+
+// Clear hub port feature
+static int usb_clear_port_feature(int hub_addr, int port, int feature) {
+    usb_setup_packet_t setup = {
+        .bmRequestType = 0x23,  // Host to device, class, other (port)
+        .bRequest = USB_REQ_CLEAR_PORT_FEATURE,
+        .wValue = feature,
+        .wIndex = port,
+        .wLength = 0
+    };
+
+    return usb_control_transfer(hub_addr, &setup, NULL, 0, 0);
+}
+
+// Enumerate devices on a hub
+static int usb_enumerate_hub(int hub_addr, int num_ports) {
+    usb_info("[USB] Enumerating hub at addr %d with %d ports\n", hub_addr, num_ports);
+
+    for (int port = 1; port <= num_ports; port++) {
+        usb_debug("[USB] Hub port %d: powering on...\n", port);
+
+        // Power on port
+        if (usb_set_port_feature(hub_addr, port, USB_PORT_FEAT_POWER) < 0) {
+            usb_debug("[USB] Failed to power on port %d\n", port);
+            continue;
+        }
+
+        // Wait for power good (hub descriptor says how long in 2ms units)
+        msleep(100);
+
+        // Get port status
+        uint32_t status = 0;
+        if (usb_get_port_status(hub_addr, port, &status) < 0) {
+            usb_debug("[USB] Failed to get port %d status\n", port);
+            continue;
+        }
+
+        usb_debug("[USB] Port %d status: %08x\n", port, status);
+
+        // Check if device connected
+        if (!(status & USB_PORT_STAT_CONNECTION)) {
+            usb_debug("[USB] Port %d: no device\n", port);
+            continue;
+        }
+
+        usb_info("[USB] Port %d: device connected!\n", port);
+
+        // Reset port
+        if (usb_set_port_feature(hub_addr, port, USB_PORT_FEAT_RESET) < 0) {
+            usb_debug("[USB] Failed to reset port %d\n", port);
+            continue;
+        }
+
+        // Wait for reset to complete
+        msleep(50);
+
+        // Get port status again
+        if (usb_get_port_status(hub_addr, port, &status) < 0) {
+            usb_debug("[USB] Failed to get port %d status after reset\n", port);
+            continue;
+        }
+
+        usb_debug("[USB] Port %d after reset: %08x\n", port, status);
+
+        // Clear reset change
+        usb_clear_port_feature(hub_addr, port, USB_PORT_FEAT_C_RESET);
+
+        // Check if port is enabled
+        if (!(status & USB_PORT_STAT_ENABLE)) {
+            usb_debug("[USB] Port %d: not enabled after reset\n", port);
+            continue;
+        }
+
+        // Determine device speed
+        int speed = 1;  // Default Full Speed
+        if (status & USB_PORT_STAT_LOW_SPEED) {
+            speed = 2;  // Low Speed
+        } else if (status & USB_PORT_STAT_HIGH_SPEED) {
+            speed = 0;  // High Speed
+        }
+
+        const char *speed_names[] = {"High", "Full", "Low"};
+        usb_debug("[USB] Port %d: %s speed device\n", port, speed_names[speed]);
+
+        // Enumerate the device on this port
+        msleep(10);  // Recovery time
+        usb_enumerate_device_at(hub_addr, port, speed);
+    }
+
+    return 0;
+}
+
+// Enumerate a device (generic - works for root or hub port)
+static int usb_enumerate_device_at(int parent_addr, int port, int speed) {
+    usb_debug("[USB] Enumerating device (parent=%d, port=%d, speed=%d)...\n",
+              parent_addr, port, speed);
+
+    if (usb_state.num_devices >= MAX_USB_DEVICES) {
+        usb_debug("[USB] Too many devices!\n");
+        return -1;
+    }
+
+    // Get device descriptor at address 0
     usb_device_descriptor_t desc;
     memset(&desc, 0, sizeof(desc));
 
-    // Get first 8 bytes to learn max packet size
-    usb_state.max_packet_size = 8;  // Start with minimum
+    // Temporarily set speed for address 0 transfers
+    int old_speed = usb_state.device_speed;
+    usb_state.device_speed = speed;
+
     int ret = usb_get_device_descriptor(0, &desc);
     if (ret < 8) {
-        printf("[USB] Failed to get device descriptor (got %d bytes)\n", ret);
+        usb_debug("[USB] Failed to get device descriptor (got %d bytes)\n", ret);
+        usb_state.device_speed = old_speed;
         return -1;
     }
 
-    usb_state.max_packet_size = desc.bMaxPacketSize0;
     usb_debug("[USB] Device descriptor: VID=%04x PID=%04x MaxPacket=%d\n",
               desc.idVendor, desc.idProduct, desc.bMaxPacketSize0);
 
-    // Set device address (use address 1)
+    // Assign address
+    int new_addr = ++usb_state.next_address;
     msleep(10);
-    ret = usb_set_address(1);
+
+    ret = usb_set_address(new_addr);
     if (ret < 0) {
-        printf("[USB] Failed to set address\n");
+        usb_debug("[USB] Failed to set address %d\n", new_addr);
+        usb_state.device_speed = old_speed;
         return -1;
     }
-    usb_state.device_address = 1;
     msleep(10);
+
+    // Create device entry
+    usb_device_t *dev = &usb_state.devices[usb_state.num_devices++];
+    dev->address = new_addr;
+    dev->speed = speed;
+    dev->max_packet_size = desc.bMaxPacketSize0;
+    dev->parent_hub = parent_addr;
+    dev->parent_port = port;
+    dev->is_hub = 0;
+    dev->hub_ports = 0;
 
     // Get full device descriptor at new address
-    ret = usb_get_device_descriptor(1, &desc);
+    ret = usb_get_device_descriptor(new_addr, &desc);
     if (ret < (int)sizeof(desc)) {
-        printf("[USB] Failed to get full device descriptor\n");
+        usb_debug("[USB] Failed to get full device descriptor\n");
         return -1;
     }
 
-    usb_debug("[USB] Device: USB%x.%x Class=%d VID=%04x PID=%04x\n",
-              desc.bcdUSB >> 8, (desc.bcdUSB >> 4) & 0xF,
+    usb_debug("[USB] Device %d: USB%x.%x Class=%d VID=%04x PID=%04x\n",
+              new_addr, desc.bcdUSB >> 8, (desc.bcdUSB >> 4) & 0xF,
               desc.bDeviceClass, desc.idVendor, desc.idProduct);
 
     // Get configuration descriptor
     uint8_t config_buf[256];
-    ret = usb_get_configuration_descriptor(1, config_buf, sizeof(config_buf));
+    ret = usb_get_configuration_descriptor(new_addr, config_buf, sizeof(config_buf));
     if (ret < 9) {
-        printf("[USB] Failed to get config descriptor\n");
+        usb_debug("[USB] Failed to get config descriptor\n");
         return -1;
     }
 
@@ -1204,10 +1360,19 @@ static int usb_enumerate_device(void) {
     usb_debug("[USB] Config: %d interfaces, total length %d\n",
               config->bNumInterfaces, config->wTotalLength);
 
-    // Parse interfaces to find HID devices
+    // Check if this is a hub (device class or interface class)
+    int is_hub = (desc.bDeviceClass == USB_CLASS_HUB);
+    int found_keyboard = 0;
+    int keyboard_ep = 0;
+    int keyboard_mps = 8;
+    int keyboard_interval = 10;
+
+    // Parse interfaces
     int offset = config->bLength;
-    while (offset < config->wTotalLength) {
+    while (offset < config->wTotalLength && offset < (int)sizeof(config_buf)) {
         uint8_t len = config_buf[offset];
+        if (len == 0) break;
+
         uint8_t type = config_buf[offset + 1];
 
         if (type == USB_DESC_INTERFACE) {
@@ -1216,29 +1381,77 @@ static int usb_enumerate_device(void) {
                       iface->bInterfaceNumber, iface->bInterfaceClass,
                       iface->bInterfaceSubClass, iface->bInterfaceProtocol);
 
-            if (iface->bInterfaceClass == USB_CLASS_HID) {
-                usb_debug("[USB] Found HID device!\n");
+            if (iface->bInterfaceClass == USB_CLASS_HUB) {
+                is_hub = 1;
+            } else if (iface->bInterfaceClass == USB_CLASS_HID) {
                 if (iface->bInterfaceProtocol == USB_HID_PROTOCOL_KEYBOARD) {
-                    usb_debug("[USB] -> Boot keyboard\n");
+                    usb_info("[USB] Found HID boot keyboard!\n");
+                    found_keyboard = 1;
                 } else if (iface->bInterfaceProtocol == USB_HID_PROTOCOL_MOUSE) {
-                    usb_debug("[USB] -> Boot mouse\n");
+                    usb_debug("[USB] Found HID boot mouse\n");
                 }
+            }
+        } else if (type == USB_DESC_ENDPOINT && found_keyboard && keyboard_ep == 0) {
+            usb_endpoint_descriptor_t *ep = (usb_endpoint_descriptor_t *)&config_buf[offset];
+            if ((ep->bmAttributes & 0x03) == 3 && (ep->bEndpointAddress & 0x80)) {
+                // Interrupt IN endpoint
+                keyboard_ep = ep->bEndpointAddress & 0x0F;
+                keyboard_mps = ep->wMaxPacketSize;
+                keyboard_interval = ep->bInterval;
+                usb_debug("[USB] Keyboard interrupt EP: %d, MPS=%d, interval=%d\n",
+                          keyboard_ep, keyboard_mps, keyboard_interval);
             }
         }
 
         offset += len;
-        if (len == 0) break;  // Prevent infinite loop
     }
 
     // Set configuration
-    ret = usb_set_configuration(1, config->bConfigurationValue);
+    ret = usb_set_configuration(new_addr, config->bConfigurationValue);
     if (ret < 0) {
-        printf("[USB] Failed to set configuration\n");
+        usb_debug("[USB] Failed to set configuration\n");
         return -1;
     }
 
-    usb_debug("[USB] Device configured!\n");
+    usb_debug("[USB] Device %d configured!\n", new_addr);
+
+    // Handle hub
+    if (is_hub) {
+        dev->is_hub = 1;
+
+        // Get hub descriptor
+        usb_hub_descriptor_t hub_desc;
+        ret = usb_get_hub_descriptor(new_addr, &hub_desc);
+        if (ret >= 7) {
+            dev->hub_ports = hub_desc.bNbrPorts;
+            usb_info("[USB] Hub has %d ports\n", hub_desc.bNbrPorts);
+
+            // Enumerate downstream devices
+            usb_enumerate_hub(new_addr, hub_desc.bNbrPorts);
+        } else {
+            usb_debug("[USB] Failed to get hub descriptor\n");
+        }
+    }
+
+    // Save keyboard info
+    if (found_keyboard && keyboard_ep > 0) {
+        usb_state.keyboard_addr = new_addr;
+        usb_state.keyboard_ep = keyboard_ep;
+        usb_state.keyboard_mps = keyboard_mps;
+        usb_state.keyboard_interval = keyboard_interval;
+        usb_info("[USB] Keyboard ready at addr %d EP %d\n", new_addr, keyboard_ep);
+    }
+
     return 0;
+}
+
+// Main enumeration entry point (for root device)
+static int usb_enumerate_device(void) {
+    usb_state.next_address = 0;
+    usb_state.num_devices = 0;
+    usb_state.keyboard_addr = 0;
+
+    return usb_enumerate_device_at(0, 0, usb_state.device_speed);
 }
 
 // ============================================================================
@@ -1292,15 +1505,160 @@ int hal_usb_init(void) {
 
     usb_state.initialized = 1;
     printf("[USB] USB initialization complete!\n");
+
+    if (usb_state.keyboard_addr) {
+        printf("[USB] Keyboard at address %d, endpoint %d\n",
+               usb_state.keyboard_addr, usb_state.keyboard_ep);
+    }
+
     return 0;
 }
 
-// Placeholder for keyboard polling (will be expanded)
+// DMA buffer for interrupt transfers (separate from control transfers)
+static uint8_t __attribute__((aligned(32))) intr_dma_buffer[64];
+
+// Data toggle for interrupt endpoint
+static int keyboard_data_toggle = 0;
+
+// Interrupt transfer for HID reports
+static int usb_interrupt_transfer(int device_addr, int ep, void *data, int data_len, int dev_speed) {
+    int ch = 1;  // Use channel 1 for interrupt transfers
+
+    // Halt channel if active
+    usb_halt_channel(ch);
+
+    // Clear all channel interrupts
+    HCINT(ch) = 0xFFFFFFFF;
+
+    // Enable interrupts for this channel
+    HCINTMSK(ch) = HCINT_XFERCOMPL | HCINT_CHHLTD | HCINT_STALL |
+                   HCINT_NAK | HCINT_ACK | HCINT_XACTERR | HCINT_BBLERR | HCINT_AHBERR;
+
+    // Configure channel for interrupt IN endpoint
+    uint32_t mps = (data_len < 64) ? data_len : 64;
+
+    uint32_t hcchar = (mps & HCCHAR_MPS_MASK) |
+                      (ep << HCCHAR_EPNUM_SHIFT) |
+                      HCCHAR_EPDIR |                              // IN direction
+                      (HCCHAR_EPTYPE_INTR << HCCHAR_EPTYPE_SHIFT) |
+                      (device_addr << HCCHAR_DEVADDR_SHIFT) |
+                      (1 << HCCHAR_MC_SHIFT);                     // 1 transaction per frame
+
+    if (dev_speed == 2) {  // Low-speed
+        hcchar |= HCCHAR_LSDEV;
+    }
+
+    // Use odd/even frame for interrupt scheduling
+    uint32_t fnum = HFNUM & 0xFFFF;
+    if (fnum & 1) {
+        hcchar |= HCCHAR_ODDFRM;
+    }
+
+    // Clear DMA buffer
+    memset(intr_dma_buffer, 0, data_len);
+    dsb();
+
+    // Set DMA address
+    HCDMA(ch) = arm_to_bus(intr_dma_buffer);
+    dsb();
+
+    // Configure channel
+    HCCHAR(ch) = hcchar;
+    dsb();
+
+    // Transfer size, 1 packet, alternating DATA0/DATA1
+    uint32_t pid = keyboard_data_toggle ? HCTSIZ_PID_DATA1 : HCTSIZ_PID_DATA0;
+    HCTSIZ(ch) = data_len | (1 << HCTSIZ_PKTCNT_SHIFT) | (pid << HCTSIZ_PID_SHIFT);
+    dsb();
+
+    // Enable channel
+    HCCHAR(ch) = hcchar | HCCHAR_CHENA;
+    dsb();
+
+    // Wait for completion (short timeout since interrupt transfers should be quick)
+    int timeout = 10000;
+    while (timeout--) {
+        uint32_t hcint = HCINT(ch);
+
+        if (hcint & HCINT_XFERCOMPL) {
+            // Success - toggle data toggle for next transfer
+            keyboard_data_toggle = !keyboard_data_toggle;
+            HCINT(ch) = 0xFFFFFFFF;
+
+            // Copy data out
+            uint32_t remaining = HCTSIZ(ch) & HCTSIZ_XFERSIZE_MASK;
+            int received = data_len - remaining;
+            if (received > 0) {
+                memcpy(data, intr_dma_buffer, received);
+            }
+            return received;
+        }
+        if (hcint & HCINT_CHHLTD) {
+            if (hcint & HCINT_ACK) {
+                // Got ACK - data received
+                keyboard_data_toggle = !keyboard_data_toggle;
+                HCINT(ch) = 0xFFFFFFFF;
+
+                uint32_t remaining = HCTSIZ(ch) & HCTSIZ_XFERSIZE_MASK;
+                int received = data_len - remaining;
+                if (received > 0) {
+                    memcpy(data, intr_dma_buffer, received);
+                }
+                return received;
+            }
+            if (hcint & HCINT_NAK) {
+                // NAK = no data available, not an error
+                HCINT(ch) = 0xFFFFFFFF;
+                return 0;
+            }
+            // Other halt reason
+            HCINT(ch) = 0xFFFFFFFF;
+            return -1;
+        }
+        if (hcint & HCINT_NAK) {
+            // NAK without halt - just means no data
+            HCINT(ch) = 0xFFFFFFFF;
+            return 0;
+        }
+        if (hcint & (HCINT_STALL | HCINT_XACTERR | HCINT_BBLERR | HCINT_AHBERR)) {
+            HCINT(ch) = 0xFFFFFFFF;
+            return -1;
+        }
+
+        usleep(1);
+    }
+
+    // Timeout - halt channel
+    usb_halt_channel(ch);
+    return -1;
+}
+
+// Poll keyboard for HID report
 int hal_usb_keyboard_poll(uint8_t *report, int report_len) {
     if (!usb_state.initialized || !usb_state.device_connected) {
         return -1;
     }
 
-    // TODO: Implement interrupt transfer for HID reports
-    return -1;
+    // Check if we have a keyboard
+    if (usb_state.keyboard_addr == 0 || usb_state.keyboard_ep == 0) {
+        return -1;
+    }
+
+    // Find device to get speed
+    int dev_speed = 1;  // Default Full Speed
+    for (int i = 0; i < usb_state.num_devices; i++) {
+        if (usb_state.devices[i].address == usb_state.keyboard_addr) {
+            dev_speed = usb_state.devices[i].speed;
+            break;
+        }
+    }
+
+    // Do interrupt transfer
+    int len = report_len;
+    if (len > usb_state.keyboard_mps) {
+        len = usb_state.keyboard_mps;
+    }
+
+    return usb_interrupt_transfer(usb_state.keyboard_addr, usb_state.keyboard_ep,
+                                  report, len, dev_speed);
 }
