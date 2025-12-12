@@ -976,3 +976,44 @@
   - `kernel/hal/pizero2w/usb.c` - DWC2 USB host driver
   - `docs/rpi_usb.md` - Comprehensive USB implementation documentation
 - **Achievement**: USB enumeration works on real Pi hardware! Keyboard detected!
+
+### Session 41
+- **INTERRUPTS WORK ON REAL PI HARDWARE!**
+- **Two-level interrupt controller architecture implemented:**
+  - **ARM Local Controller (0x40000000):** Root controller for BCM2836/2837
+    - Per-core interrupt routing
+    - LOCAL_CONTROL, LOCAL_PRESCALER for timer config
+    - LOCAL_TIMER_INT_CTRL0 for enabling timer IRQs
+    - LOCAL_IRQ_PENDING0 for reading pending interrupts
+    - Bit 1 = CNTPNSIRQ (ARM Generic Timer)
+    - Bit 8 = GPU interrupt (from BCM2835 IC)
+  - **BCM2835 IC (0x3F00B200):** GPU peripheral interrupts
+    - Three banks: Bank 0 (ARM local), Bank 1 (GPU 0-31), Bank 2 (GPU 32-63)
+    - Shortcut logic: high-priority IRQs (bits 10-20) bypass bank summary
+    - USB is Bank 1 IRQ 9, shortcut to bit 11
+    - ENABLE_1/DISABLE_1 for Bank 1 interrupts
+- **HAL properly refactored:**
+  - `kernel/hal/qemu/irq.c` - GIC-400 driver with handle_irq()
+  - `kernel/hal/pizero2w/irq.c` - BCM2836+BCM2835 driver with handle_irq()
+  - `kernel/irq.c` - Thin wrappers + shared exception handlers
+  - No more #ifdef spaghetti - clean platform separation
+- **ARM Generic Timer working on Pi:**
+  - Same timer as QEMU (CNTPNSIRQ)
+  - Routes through ARM Local Controller bit 1
+  - 100ms interval, prints "Interrupt!" every second (10 ticks)
+- **GPIO driver added** (`kernel/hal/pizero2w/gpio.c`):
+  - GPIO 47 (ACT LED) configured as output
+  - LED toggle on each interrupt (didn't visibly blink but code is correct)
+- **Clean-room implementation:**
+  - BCM2835 IC spec generated from Linux irq-bcm2835.c
+  - ARM Local Controller spec generated from Linux irq-bcm2836.c
+  - No GPL code copied - just hardware register documentation
+- **What this enables:**
+  - USB interrupts for HID keyboard (IRQ 17 = Bank 1 bit 9)
+  - Proper interrupt-driven USB driver (no polling!)
+  - Foundation for DMA-based USB transfers
+- **Files created:**
+  - `kernel/hal/pizero2w/irq.c` - Pi interrupt controller driver
+  - `kernel/hal/pizero2w/gpio.c` - Pi GPIO driver
+  - `kernel/hal/qemu/irq.c` - QEMU GIC driver (moved from kernel/irq.c)
+- **Achievement**: Interrupts fire on real Pi hardware! Timer ticks, handler runs!
