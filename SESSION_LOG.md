@@ -1017,3 +1017,41 @@
   - `kernel/hal/pizero2w/gpio.c` - Pi GPIO driver
   - `kernel/hal/qemu/irq.c` - QEMU GIC driver (moved from kernel/irq.c)
 - **Achievement**: Interrupts fire on real Pi hardware! Timer ticks, handler runs!
+
+### Session 42
+- **QEMU raspi3b debugging infrastructure for USB**
+- **Problem:** USB keyboard works partially on real Pi (enumerates, finds keyboard, no input) but very hard to debug with only serial output
+- **Solution:** Run Pi build in QEMU raspi3b with same DWC2 controller for easier debugging
+- **Pi serial driver rewritten:**
+  - Switched from Mini UART (0x3F215000) to PL011 (0x3F201000)
+  - PL011 works on both real Pi (with serial cable) and QEMU raspi3b
+  - QEMU's `-serial stdio` connects to PL011
+- **Printf output control:**
+  - Added `PRINTF_UART` compile flag
+  - `PRINTF=uart` (default) sends printf to UART
+  - `PRINTF=screen` sends printf to framebuffer console
+  - Same default for both targets (not target-dependent)
+- **Fixed QEMU hang during USB init:**
+  - Original `usleep()`/`msleep()` used nop loops calibrated for 1GHz Pi
+  - M2 laptop runs QEMU much faster - "100ms" delay was microseconds
+  - QEMU couldn't keep up with rapid mailbox/register polling
+  - **Fix:** Use ARM generic timer (`cntpct_el0`, `cntfrq_el0`) for real delays
+- **Added `make run-pi` target:**
+  - Builds with `TARGET=pi`
+  - Runs in QEMU raspi3b with USB keyboard attached
+  - One command to test USB changes
+- **Disabled noisy interrupt logging** (was printing every 100ms)
+- **USB debugging findings:**
+  - QEMU raspi3b boots, initializes USB, detects device as Full Speed
+  - Fails at first GET_DESCRIPTOR with: `usb_generic_handle_packet: ctrl buffer too small (43551 > 4096)`
+  - 43551 = 0xAA1F = garbage in wLength field
+  - QEMU is stricter than real Pi - catches malformed packets that real hardware tolerates
+  - Real Pi: enumeration succeeds but keyboard input doesn't work
+  - Different failure points, possibly related root cause
+- **Files modified:**
+  - `kernel/hal/pizero2w/serial.c` - PL011 instead of Mini UART
+  - `kernel/hal/pizero2w/usb.c` - Timer-based delays, debug prints
+  - `kernel/hal/pizero2w/irq.c` - Disabled interrupt spam
+  - `kernel/printf.c` - PRINTF_UART flag support
+  - `Makefile` - PRINTF option, `run-pi` target
+- **Achievement**: Can now debug USB driver in QEMU with full serial output!
