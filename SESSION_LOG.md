@@ -1128,3 +1128,41 @@
   - `kernel/fb.c` - use memset32, optimized fb_draw_char
   - `kernel/console.c` - use memmove/memset32 for scroll
 - **TODO:** Apply same optimizations to userspace `gfx.h` for desktop/GUI apps
+Session 44: USB Keyboard Working on Real Pi Hardware!
+
+  Goal: Fix USB keyboard on Raspberry Pi Zero 2W (worked in QEMU, not on real hardware)
+
+  Issues Fixed:
+
+  1. Port Power Being Disabled (HPRT0 bug)
+    - Port interrupt handler was writing only W1C bits, clearing PRTPWR
+    - Fix: Preserve RW bits when clearing W1C status bits, mask out PRTENA
+  2. Interrupt Storm / Too Fast Polling
+    - SOF interrupt firing 1000x/sec was overwhelming the Pi
+    - Removed SOF-based polling, switched to timer-tick based (every 10ms)
+    - Reduced channel interrupt mask to just CHHLTD + errors
+  3. CPU Cache Coherency (THE BIG ONE)
+    - QEMU doesn't emulate caches, so DMA "just works"
+    - Real Pi: CPU writes sit in L1 cache, DMA reads stale RAM = garbage
+    - Added clean_data_cache_range() before OUT/SETUP transfers
+    - Added invalidate_data_cache_range() before/after IN transfers
+    - Increased DMA buffer alignment from 32 to 64 bytes (Cortex-A53 cache line)
+  4. Missing SET_PROTOCOL
+    - HID keyboards default to Report Protocol (complex reports)
+    - Added SET_PROTOCOL(0) to switch to Boot Protocol (simple 8-byte reports)
+    - Added SET_IDLE(0) to only report on key state changes
+
+  Key Learnings:
+
+  - Cache coherency is critical for DMA on real ARM hardware
+  - dc cvac cleans cache to point of coherency (flush to RAM)
+  - dc ivac invalidates cache (force re-read from RAM)
+  - Always clean before DMA reads from buffer, invalidate before CPU reads DMA results
+
+  Files Modified:
+
+  - kernel/hal/pizero2w/usb.c - Cache maintenance, SET_PROTOCOL, interrupt handling
+  - kernel/hal/pizero2w/irq.c - Timer-based keyboard polling
+  - kernel/hal/hal.h - Added hal_usb_keyboard_tick()
+
+  USB keyboard now works on real Raspberry Pi Zero 2W hardware!

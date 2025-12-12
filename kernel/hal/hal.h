@@ -90,5 +90,14 @@ void hal_wfi(void);             // Wait for interrupt
  */
 int hal_usb_init(void);
 int hal_usb_keyboard_poll(uint8_t *report, int report_len);
+void hal_usb_keyboard_tick(void);  // Call from timer tick to schedule polls
+
+#ifdef PI_DEBUG_MODE
+/*
+ * USB Debug Mode
+ * Minimal debug loop for USB keyboard troubleshooting
+ */
+void usb_keyboard_debug_loop(void);
+#endif
 
 #endif // HAL_H

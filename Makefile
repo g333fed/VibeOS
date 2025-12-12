@@ -27,7 +27,15 @@ BUILD_DIR = build
 USER_BUILD_DIR = $(BUILD_DIR)/user
 
 # Target-specific settings
-ifeq ($(TARGET),pi)
+ifeq ($(TARGET),pi-debug)
+    # Raspberry Pi Zero 2W - Debug Mode (minimal boot for USB debugging)
+    HAL_PLATFORM = pizero2w
+    CPU = cortex-a53
+    LINKER_SCRIPT = linker-pi.ld
+    BOOT_SRC = $(BOOT_DIR)/boot-pi.S
+    KERNEL_BIN_NAME = kernel8.img
+    CFLAGS_TARGET = -DTARGET_PI -DPI_DEBUG_MODE
+else ifeq ($(TARGET),pi)
     # Raspberry Pi Zero 2W
     HAL_PLATFORM = pizero2w
     CPU = cortex-a53
@@ -263,6 +271,17 @@ run-nographic: $(BUILD_DIR)/vibeos.bin $(DISK_IMG)
 run-pi:
 	$(MAKE) TARGET=pi
 	$(QEMU) -M raspi3b -kernel build/kernel8.img -serial stdio -usb -device usb-kbd
+
+# Build Pi debug mode (minimal boot for USB keyboard debugging)
+# User deploys kernel8.img to SD card manually
+# Forces PRINTF=screen since Pi has no serial without adapter
+pi-debug:
+	$(MAKE) TARGET=pi-debug PRINTF=screen
+	@echo "========================================="
+	@echo "  Pi Debug Mode kernel built!"
+	@echo "  Output goes to SCREEN (not UART)"
+	@echo "  Copy build/kernel8.img to SD card"
+	@echo "========================================="
 
 debug: $(BUILD_DIR)/vibeos.bin
 	$(QEMU) $(QEMU_FLAGS) -S -s

@@ -227,6 +227,14 @@ void handle_irq(void) {
     /* PMU could be handled here if needed */
 }
 
+// DWC2 registers for debug
+#define USB_BASE_ADDR   0x3F980000
+#define DWC2_GINTSTS    (*(volatile uint32_t *)(USB_BASE_ADDR + 0x014))
+#define DWC2_GINTMSK    (*(volatile uint32_t *)(USB_BASE_ADDR + 0x018))
+#define DWC2_GAHBCFG    (*(volatile uint32_t *)(USB_BASE_ADDR + 0x008))
+#define DWC2_HPRT0      (*(volatile uint32_t *)(USB_BASE_ADDR + 0x440))
+#define DWC2_HFNUM      (*(volatile uint32_t *)(USB_BASE_ADDR + 0x408))
+
 /*
  * Timer tick handler - reschedules itself for the next interval
  */
@@ -240,10 +248,18 @@ static void on_timer_tick(void) {
 
     led_toggle();
 
-    // Disabled for debugging - too noisy
-    // if (tick_count % 10 == 0) {
-    //     printf("Interrupt! count=%llu\n", tick_count);
-    // }
+    // Poll USB keyboard every tick (10ms)
+    // This is much more efficient than SOF-based polling (1000 IRQs/sec)
+    hal_usb_keyboard_tick();
+
+    // Debug: check USB interrupt status every second
+    if (tick_count % 100 == 0) {
+        uint32_t gintsts = DWC2_GINTSTS;
+        uint32_t hprt0 = DWC2_HPRT0;
+        uint32_t hfnum = DWC2_HFNUM;
+        printf("[TICK %llu] GINTSTS=%08x HPRT0=%08x HFNUM=%08x\n",
+               tick_count, gintsts, hprt0, hfnum);
+    }
 }
 
 /* ========== Public HAL interface ========== */
