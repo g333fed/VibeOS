@@ -133,6 +133,9 @@ void kernel_main(void) {
 
     // Initialize timer (10ms tick for responsive keyboard polling)
     hal_timer_init(10);
+
+    // Initialize GPIO LED
+    hal_led_init();
 #endif
 
 #ifdef TARGET_QEMU

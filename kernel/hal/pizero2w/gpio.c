@@ -43,9 +43,10 @@
 #define GPIO_FUNC_ALT4      3
 #define GPIO_FUNC_ALT5      2
 
-// ACT LED is on GPIO 47
-#define ACT_LED_GPIO        47
-#define ACT_LED_BIT         (1 << (ACT_LED_GPIO - 32))  // Bit 15 in bank 1
+// ACT LED is on GPIO 29 for Pi Zero 2W (same as Pi 3B+)
+// Note: Pi Zero/Zero W use GPIO 47, but Zero 2W is different!
+#define ACT_LED_GPIO        29
+#define ACT_LED_BIT         (1 << ACT_LED_GPIO)  // Bit 29 in bank 0
 
 // ============================================================================
 // LED State
@@ -70,45 +71,49 @@ static inline void dsb(void) {
 // ============================================================================
 
 void led_init(void) {
-    // GPIO 47 is in GPFSEL4
-    // GPIO 47 = (47 - 40) = 7th GPIO in GPFSEL4
-    // Bits [23:21] control GPIO 47 function
+    // GPIO 29 is in GPFSEL2 (GPIOs 20-29)
+    // GPIO 29 = (29 - 20) = 9th GPIO in GPFSEL2
+    // Bits [29:27] control GPIO 29 function
     //
     // Function select: 3 bits per GPIO
-    // GPIO 40: bits [2:0]
-    // GPIO 41: bits [5:3]
-    // GPIO 42: bits [8:6]
-    // GPIO 43: bits [11:9]
-    // GPIO 44: bits [14:12]
-    // GPIO 45: bits [17:15]
-    // GPIO 46: bits [20:18]
-    // GPIO 47: bits [23:21]
+    // GPIO 20: bits [2:0]
+    // GPIO 21: bits [5:3]
+    // GPIO 22: bits [8:6]
+    // GPIO 23: bits [11:9]
+    // GPIO 24: bits [14:12]
+    // GPIO 25: bits [17:15]
+    // GPIO 26: bits [20:18]
+    // GPIO 27: bits [23:21]
+    // GPIO 28: bits [26:24]
+    // GPIO 29: bits [29:27]
 
-    uint32_t sel = GPFSEL4;
+    uint32_t sel = GPFSEL2;
 
-    // Clear bits [23:21]
-    sel &= ~(7 << 21);
+    // Clear bits [29:27]
+    sel &= ~(7 << 27);
 
     // Set to output (001)
-    sel |= (GPIO_FUNC_OUTPUT << 21);
+    sel |= (GPIO_FUNC_OUTPUT << 27);
 
-    GPFSEL4 = sel;
+    GPFSEL2 = sel;
     dsb();
 
     // Start with LED off
     led_off();
 
-    printf("[GPIO] ACT LED (GPIO 47) initialized\n");
+    printf("[GPIO] ACT LED (GPIO 29) initialized\n");
 }
 
 void led_on(void) {
-    GPSET1 = ACT_LED_BIT;
+    // Zero 2W: Clear pin to turn LED ON (active low)
+    GPCLR0 = ACT_LED_BIT;
     dsb();
     led_state = 1;
 }
 
 void led_off(void) {
-    GPCLR1 = ACT_LED_BIT;
+    // Zero 2W: Set pin to turn LED OFF (active low)
+    GPSET0 = ACT_LED_BIT;
     dsb();
     led_state = 0;
 }
@@ -123,4 +128,24 @@ void led_toggle(void) {
 
 int led_get_state(void) {
     return led_state;
+}
+
+// ============================================================================
+// HAL LED Interface
+// ============================================================================
+
+void hal_led_init(void) {
+    led_init();
+}
+
+void hal_led_on(void) {
+    led_on();
+}
+
+void hal_led_off(void) {
+    led_off();
+}
+
+void hal_led_toggle(void) {
+    led_toggle();
 }

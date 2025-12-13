@@ -100,4 +100,13 @@ void hal_usb_keyboard_tick(void);  // Call from timer tick to schedule polls
 void usb_keyboard_debug_loop(void);
 #endif
 
+/*
+ * GPIO LED
+ * Platform-specific activity LED control
+ */
+void hal_led_init(void);
+void hal_led_on(void);
+void hal_led_off(void);
+void hal_led_toggle(void);
+
 #endif // HAL_H

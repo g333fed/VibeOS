@@ -17,6 +17,7 @@
 #include "net.h"
 #include "tls.h"
 #include "ttf.h"
+#include "hal/hal.h"
 
 // Global kernel API instance
 kapi_t kapi;
@@ -330,4 +331,9 @@ void kapi_init(void) {
     kapi.ttf_get_kerning = ttf_get_kerning;
     kapi.ttf_get_metrics = ttf_get_metrics;
     kapi.ttf_is_ready = ttf_is_ready;
+
+    // GPIO LED
+    kapi.led_on = hal_led_on;
+    kapi.led_off = hal_led_off;
+    kapi.led_toggle = hal_led_toggle;
 }

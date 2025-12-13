@@ -166,6 +166,11 @@ typedef struct kapi {
     int (*ttf_get_kerning)(int cp1, int cp2, int size);
     void (*ttf_get_metrics)(int size, int *ascent, int *descent, int *line_gap);
     int (*ttf_is_ready)(void);
+
+    // GPIO LED (for Pi only, no-op on QEMU)
+    void (*led_on)(void);
+    void (*led_off)(void);
+    void (*led_toggle)(void);
 } kapi_t;
 
 // TTF glyph info (returned by ttf_get_glyph)

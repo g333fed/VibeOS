@@ -67,7 +67,7 @@ HAL_C_SRCS = $(wildcard $(HAL_DIR)/$(HAL_PLATFORM)/*.c)
 
 # Userspace programs to build and install to disk
 # Note: browser is handled specially (multi-file build from user/bin/browser/)
-USER_PROGS = snake tetris desktop calc vibesh echo ls cat pwd mkdir touch rm term uptime sysmon textedit files date play music ping fetch viewer
+USER_PROGS = snake tetris desktop calc vibesh echo ls cat pwd mkdir touch rm term uptime sysmon textedit files date play music ping fetch viewer vim blink
 USER_PROGS_MULTIFILE = browser
 
 # Object files
