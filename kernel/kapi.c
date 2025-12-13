@@ -17,6 +17,7 @@
 #include "net.h"
 #include "tls.h"
 #include "ttf.h"
+#include "klog.h"
 #include "hal/hal.h"
 
 // Global kernel API instance
@@ -352,4 +353,8 @@ void kapi_init(void) {
     // USB device list
     kapi.usb_device_count = hal_usb_get_device_count;
     kapi.usb_device_info = hal_usb_get_device_info;
+
+    // Kernel log (dmesg)
+    kapi.klog_read = klog_read;
+    kapi.klog_size = klog_size;
 }

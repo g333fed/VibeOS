@@ -70,7 +70,7 @@ HAL_USB_C_SRCS = $(wildcard $(HAL_DIR)/$(HAL_PLATFORM)/usb/*.c)
 # Note: browser is handled specially (multi-file build from user/bin/browser/)
 USER_PROGS = snake tetris desktop calc vibesh echo ls cat pwd mkdir touch rm term uptime sysmon textedit files date play music ping fetch viewer vim blink \
              clear yes sleep seq whoami hostname uname which basename dirname \
-             head tail wc df free ps stat grep find hexdump du cp mv kill lscpu lsusb
+             head tail wc df free ps stat grep find hexdump du cp mv kill lscpu lsusb dmesg
 USER_PROGS_MULTIFILE = browser
 
 # Object files

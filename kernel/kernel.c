@@ -24,6 +24,7 @@
 #include "virtio_net.h"
 #include "net.h"
 #include "ttf.h"
+#include "klog.h"
 #include "hal/hal.h"
 
 // UART functions now use HAL
@@ -58,6 +59,9 @@ void kernel_main(void) {
     uart_putc('E');
     uart_putc('\r');
     uart_putc('\n');
+
+    // Initialize kernel log first (static buffer, no malloc needed)
+    klog_init();
 
     // Initialize memory management first (needed for malloc)
     memory_init();

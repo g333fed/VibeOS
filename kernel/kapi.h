@@ -191,6 +191,10 @@ typedef struct {
     int (*usb_device_info)(int idx, uint16_t *vid, uint16_t *pid,
                            char *name, int name_len);            // Get USB device info
 
+    // Kernel log (dmesg)
+    size_t (*klog_read)(char *buf, size_t offset, size_t size);  // Read from kernel log
+    size_t (*klog_size)(void);                                   // Get log size
+
 } kapi_t;
 
 // TTF font style flags (for ttf_get_glyph)

@@ -6,6 +6,7 @@
  */
 
 #include "printf.h"
+#include "klog.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -34,6 +35,7 @@ typedef struct {
 
 static void printf_putchar(char c, void *ctx) {
     (void)ctx;
+    klog_putc(c);  // Always log to ring buffer
 #ifdef PRINTF_UART
     if (c == '\n') uart_putc('\r');
     uart_putc(c);
