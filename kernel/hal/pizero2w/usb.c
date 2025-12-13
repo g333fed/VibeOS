@@ -1797,11 +1797,7 @@ static void usb_irq_handler(void) {
                     }
                     else if (hcint & HCINT_NAK) {
                         // NAK = no data available (normal for HID when no key pressed)
-                        // Don't restart here - timer tick will schedule the next poll
                         usb_kbd_nak_count++;
-                        if (usb_kbd_nak_count <= 5 || usb_kbd_nak_count % 500 == 0) {
-                            printf("[USB-IRQ] KBD NAK #%d\n", usb_kbd_nak_count);
-                        }
                     }
                     else if (hcint & (HCINT_STALL | HCINT_XACTERR | HCINT_BBLERR)) {
                         // Error - log it
@@ -1809,12 +1805,14 @@ static void usb_irq_handler(void) {
                     }
                     // Note: CHHLTD alone (without NAK/ACK/XFERCOMPL) can happen - just means halt
 
-                    // Mark transfer complete - timer tick will schedule the next one
-                    kbd_transfer_pending = 0;
-                    kbd_last_frame = HFNUM & 0xFFFF;
-
-                    // Clear channel interrupt
+                    // Clear channel interrupt first
                     HCINT(ch) = 0xFFFFFFFF;
+
+                    // Immediately restart transfer for faster polling (~1ms vs 10ms)
+                    // This ensures we catch quick keypresses and releases
+                    kbd_transfer_pending = 0;
+                    usb_restart_keyboard_transfer();
+
                     continue;  // Skip the HCINT clear below
                 }
 
@@ -1926,9 +1924,9 @@ void usb_start_keyboard_transfer(void) {
     printf("[USB] First transfer started, pending=%d\n", kbd_transfer_pending);
 }
 
-// Called from timer tick (every 10ms) to schedule keyboard polls
-// This replaces SOF-based polling which was too expensive (1000 IRQs/sec)
-// Also handles port reset recovery
+// Called from timer tick (every 10ms) as FALLBACK for keyboard polling
+// Primary polling is now done by ISR immediately restarting transfers
+// This handles: port reset recovery, and recovering if ISR fails to restart
 static uint32_t tick_counter = 0;
 
 void hal_usb_keyboard_tick(void) {
