@@ -71,7 +71,7 @@ HAL_USB_C_SRCS = $(wildcard $(HAL_DIR)/$(HAL_PLATFORM)/usb/*.c)
 USER_PROGS = snake tetris desktop calc vibesh echo ls cat pwd mkdir touch rm term uptime sysmon textedit files date play music ping fetch viewer vim led \
              clear yes sleep seq whoami hostname uname which basename dirname \
              head tail wc df free ps stat grep find hexdump du cp mv kill lscpu lsusb dmesg mousetest readtest
-USER_PROGS_MULTIFILE = browser
+USER_PROGS_MULTIFILE = browser micropython
 
 # Object files
 BOOT_OBJ = $(BUILD_DIR)/boot.o
@@ -193,6 +193,14 @@ $(USER_BUILD_DIR)/browser.elf: $(USER_BUILD_DIR)/crt0.o $(USER_BUILD_DIR)/browse
 $(USER_BUILD_DIR)/browser_main.o: $(USER_DIR)/bin/browser/main.c $(USER_DIR)/bin/browser/*.h | $(USER_BUILD_DIR)
 	$(CC) $(USER_CFLAGS) -I$(USER_DIR)/bin/browser -c $< -o $@
 
+# MicroPython - uses its own build system in micropython/ports/vibeos/
+# This rule builds MicroPython using its Makefile and copies the result
+$(USER_BUILD_DIR)/micropython.elf: | $(USER_BUILD_DIR)
+	@echo "Building MicroPython..."
+	$(MAKE) -C micropython/ports/vibeos
+	cp micropython/ports/vibeos/build/micropython.elf $@
+	@echo "Built MicroPython: $@"
+
 # Build all userspace programs
 user: $(USER_ELFS) $(USER_ELFS_MULTIFILE)
 
@@ -211,6 +219,7 @@ install-user: user $(DISK_IMG)
 	@if [ -f duck.png ]; then cp duck.png /tmp/vibeos_mount/duck.png && echo "  Installed /duck.png"; fi
 	@if [ -f duck.jpg ]; then cp duck.jpg /tmp/vibeos_mount/duck.jpg && echo "  Installed /duck.jpg"; fi
 	@if [ -f duck.bmp ]; then cp duck.bmp /tmp/vibeos_mount/duck.bmp && echo "  Installed /duck.bmp"; fi
+	@if [ -d python ]; then mkdir -p /tmp/vibeos_mount/python && cp python/*.py /tmp/vibeos_mount/python/ && echo "  Installed /python/*.py"; fi
 	@dot_clean /tmp/vibeos_mount 2>/dev/null || true
 	@find /tmp/vibeos_mount -name '._*' -delete 2>/dev/null || true
 	@find /tmp/vibeos_mount -name '.DS_Store' -delete 2>/dev/null || true

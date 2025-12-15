@@ -15,6 +15,10 @@ typedef void FILE;
 #define _IOLBF 1
 #define _IOFBF 0
 
+#define SEEK_SET 0
+#define SEEK_CUR 1
+#define SEEK_END 2
+
 // UART output for DEBUG
 extern void uart_puts(const char *s);
 

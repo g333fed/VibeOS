@@ -2,6 +2,17 @@
 #ifndef _MATH_H
 #define _MATH_H
 
+/* IEEE 754 special values */
+#define INFINITY (__builtin_inf())
+#define NAN (__builtin_nan(""))
+#define HUGE_VAL (__builtin_huge_val())
+
+/* Classification macros */
+#define isnan(x) __builtin_isnan(x)
+#define isinf(x) __builtin_isinf(x)
+#define isfinite(x) __builtin_isfinite(x)
+#define signbit(x) __builtin_signbit(x)
+
 /* Use ARM64 hardware sqrt instruction */
 static inline double sqrt(double x) {
     double result;
