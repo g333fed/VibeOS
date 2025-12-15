@@ -52,6 +52,34 @@ static inline void dmb(void) {
     asm volatile("dmb sy" ::: "memory");
 }
 
+static inline void dsb(void) {
+    asm volatile("dsb sy" ::: "memory");
+}
+
+// Cache maintenance for GPU coherency
+#define CACHE_LINE_SIZE 64
+
+static void cache_clean(const void *start, uint32_t len) {
+    uintptr_t addr = (uintptr_t)start & ~(CACHE_LINE_SIZE - 1);
+    uintptr_t end = (uintptr_t)start + len;
+    while (addr < end) {
+        asm volatile("dc cvac, %0" : : "r"(addr) : "memory");
+        addr += CACHE_LINE_SIZE;
+    }
+    dsb();
+}
+
+static void cache_invalidate(void *start, uint32_t len) {
+    uintptr_t addr = (uintptr_t)start & ~(CACHE_LINE_SIZE - 1);
+    uintptr_t end = (uintptr_t)start + len;
+    while (addr < end) {
+        // Use clean-and-invalidate - safer for dirty lines
+        asm volatile("dc civac, %0" : : "r"(addr) : "memory");
+        addr += CACHE_LINE_SIZE;
+    }
+    dsb();
+}
+
 // Debug output (works before printf is available)
 static void debug_putc(char c) {
     // Use UART for early debug - Mini UART at 0x3F215040
@@ -191,14 +219,20 @@ int hal_fb_init(uint32_t width, uint32_t height) {
 
     debug_puts("[HAL/FB] Sending mailbox request...\n");
 
-    // Send message to GPU
+    // Clean cache so GPU sees our writes
+    cache_clean((void *)mailbox_buffer, sizeof(mailbox_buffer));
     dmb();
+
+    // Send message to GPU
     uint32_t bus_addr = arm_to_bus((void *)mailbox_buffer);
     mailbox_write(MAILBOX_CH_PROP, bus_addr);
 
     // Wait for response
     mailbox_read(MAILBOX_CH_PROP);
     dmb();
+
+    // Invalidate cache so we see GPU's response
+    cache_invalidate((void *)mailbox_buffer, sizeof(mailbox_buffer));
 
     // Check response
     if (mailbox_buffer[1] != 0x80000000) {
@@ -287,11 +321,17 @@ int hal_fb_set_scroll_offset(uint32_t y) {
     mailbox_buffer[idx++] = TAG_END;
     mailbox_buffer[0] = idx * 4;
 
+    // Clean cache so GPU sees our writes
+    cache_clean((void *)mailbox_buffer, sizeof(mailbox_buffer));
     dmb();
+
     uint32_t bus_addr = arm_to_bus((void *)mailbox_buffer);
     mailbox_write(MAILBOX_CH_PROP, bus_addr);
     mailbox_read(MAILBOX_CH_PROP);
     dmb();
+
+    // Invalidate cache so we see GPU's response
+    cache_invalidate((void *)mailbox_buffer, sizeof(mailbox_buffer));
 
     if (mailbox_buffer[1] == 0x80000000) {
         current_scroll_y = y;

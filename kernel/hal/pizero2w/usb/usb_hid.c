@@ -206,10 +206,10 @@ static void usb_do_keyboard_transfer(void) {
         hcchar |= HCCHAR_ODDFRM;
     }
 
-    // Clear DMA buffer and invalidate cache for receive
+    // Clear DMA buffer and flush zeros to RAM for receive
     memset(intr_dma_buffer, 0, 8);
-    // CRITICAL: Invalidate cache so DMA writes go directly to RAM
-    invalidate_data_cache_range((uintptr_t)intr_dma_buffer, 8);
+    // CLEAN (flush) zeros to RAM - we'll invalidate AFTER DMA completes
+    clean_data_cache_range((uintptr_t)intr_dma_buffer, 8);
     dsb();
 
     // Configure channel interrupts
@@ -272,9 +272,10 @@ static void usb_do_mouse_transfer(void) {
         hcchar |= HCCHAR_ODDFRM;
     }
 
-    // Clear DMA buffer and invalidate cache for receive
+    // Clear DMA buffer and flush zeros to RAM for receive
     memset(mouse_dma_buffer, 0, MOUSE_REPORT_SIZE);
-    invalidate_data_cache_range((uintptr_t)mouse_dma_buffer, MOUSE_REPORT_SIZE);
+    // CLEAN (flush) zeros to RAM - we'll invalidate AFTER DMA completes
+    clean_data_cache_range((uintptr_t)mouse_dma_buffer, MOUSE_REPORT_SIZE);
     dsb();
 
     // Configure channel interrupts

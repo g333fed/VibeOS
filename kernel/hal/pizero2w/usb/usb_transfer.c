@@ -115,6 +115,7 @@ int usb_wait_for_dma_complete(int ch, int max_retries) {
         while (timeout--) {
             uint32_t hcint = HCINT(ch);
             uint32_t hcsplt = HCSPLT(ch);
+
             int split_enabled = (hcsplt & HCSPLT_SPLITENA) != 0;
             int in_compsplt = (hcsplt & HCSPLT_COMPSPLT) != 0;
 
@@ -236,11 +237,12 @@ int usb_wait_for_dma_complete(int ch, int max_retries) {
                 return -1;
             }
 
-            usleep(1);
+            usleep(50);  // Give hardware time to update status (50us)
         }
 
         if (retry < max_retries - 1) {
-            usb_info("[USB] Retry %d/%d (last hcint=%08x)\n", retry + 1, max_retries, HCINT(ch));
+            usb_debug("[USB] Retry %d/%d: hcint=%08x hcchar=%08x hctsiz=%08x\n",
+                      retry + 1, max_retries, HCINT(ch), HCCHAR(ch), HCTSIZ(ch));
             // Clear COMPSPLT for fresh start-split
             if (HCSPLT(ch) & HCSPLT_SPLITENA) {
                 HCSPLT(ch) &= ~HCSPLT_COMPSPLT;
@@ -252,7 +254,7 @@ int usb_wait_for_dma_complete(int ch, int max_retries) {
         }
     }
 
-    usb_info("[USB] Transfer timeout after %d retries\n", max_retries);
+    usb_debug("[USB] Transfer timeout after %d retries\n", max_retries);
     return -1;
 }
 
@@ -359,9 +361,9 @@ int usb_control_transfer(int device_addr, usb_setup_packet_t *setup,
             data_hcchar |= HCCHAR_EPDIR;  // IN
             // Clear DMA buffer for IN transfer
             memset(dma_buffer, 0, data_len);
-            // Invalidate cache - ensures we don't hold stale lines that could
-            // be evicted into the buffer while DMA is writing
-            invalidate_data_cache_range((uintptr_t)dma_buffer, data_len);
+            // CLEAN (flush) zeros to RAM so buffer is zeroed before DMA writes
+            // We'll invalidate AFTER the transfer to read the DMA data
+            clean_data_cache_range((uintptr_t)dma_buffer, data_len);
         } else {
             // Copy data to DMA buffer for OUT transfer
             memcpy(dma_buffer, data, data_len);

@@ -59,6 +59,18 @@ SECTIONS
         _bss_end = .;
     } > RAM
 
+    /* DMA buffers - placed in uncached GPU memory region (0x1C000000+) */
+    /* This region is mapped as Device memory, so no cache maintenance needed */
+    .dma_buffers 0x1C100000 (NOLOAD) : {
+        _dma_start = .;
+        *(.dma_buffers)
+        *(.dma_buffers.*)
+        . = ALIGN(64);
+        _dma_end = .;
+    }
+
+    /* Page tables are now defined in boot-pi.S with explicit .align 12 */
+
     /* Discard unneeded sections */
     /DISCARD/ : {
         *(.comment)

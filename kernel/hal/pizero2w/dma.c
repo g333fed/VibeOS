@@ -91,6 +91,22 @@ static inline void dsb(void) {
     asm volatile("dsb sy" ::: "memory");
 }
 
+// Clean data cache for a memory range (flush to RAM so DMA can see it)
+// Cortex-A53 has 64-byte cache lines
+#define CACHE_LINE_SIZE 64
+
+static void cache_clean_range(const void *start, uint32_t len) {
+    uintptr_t addr = (uintptr_t)start & ~(CACHE_LINE_SIZE - 1);  // Align down
+    uintptr_t end = (uintptr_t)start + len;
+
+    while (addr < end) {
+        // DC CVAC: Data Cache Clean by Virtual Address to Point of Coherency
+        asm volatile("dc cvac, %0" : : "r"(addr) : "memory");
+        addr += CACHE_LINE_SIZE;
+    }
+    dsb();  // Ensure all cache operations complete before continuing
+}
+
 // Convert ARM physical address to bus address for DMA
 // On BCM2837, use 0xC0000000 alias (uncached, coherent)
 static inline uint32_t phys_to_bus(void *ptr) {
@@ -162,6 +178,9 @@ int hal_dma_copy(void *dst, const void *src, uint32_t len) {
     if (!dma_initialized) return -1;
     if (len == 0) return 0;
 
+    // Clean CPU cache so DMA sees current data in RAM
+    cache_clean_range(src, len);
+
     // Wait for any previous transfer
     dma_wait(FB_DMA_CHANNEL);
 
@@ -173,7 +192,8 @@ int hal_dma_copy(void *dst, const void *src, uint32_t len) {
     dma_cb.stride = 0;
     dma_cb.nextconbk = 0;
 
-    dsb();  // Ensure CB is written to memory
+    // Clean cache for control block so DMA hardware sees our writes
+    cache_clean_range(&dma_cb, sizeof(dma_cb));
 
     // Point DMA to control block
     dma_write(FB_DMA_CHANNEL, DMA_CONBLK_AD, phys_to_bus(&dma_cb));
@@ -199,6 +219,9 @@ int hal_dma_copy_2d(void *dst, uint32_t dst_pitch,
     if (!dma_initialized) return -1;
     if (width == 0 || height == 0) return 0;
 
+    // Clean CPU cache for entire source region so DMA sees current data
+    cache_clean_range(src, src_pitch * height);
+
     // Wait for any previous transfer
     dma_wait(FB_DMA_CHANNEL);
 
@@ -220,7 +243,8 @@ int hal_dma_copy_2d(void *dst, uint32_t dst_pitch,
 
     dma_cb.nextconbk = 0;
 
-    dsb();  // Ensure CB is written to memory
+    // Clean cache for control block so DMA hardware sees our writes
+    cache_clean_range(&dma_cb, sizeof(dma_cb));
 
     // Point DMA to control block
     dma_write(FB_DMA_CHANNEL, DMA_CONBLK_AD, phys_to_bus(&dma_cb));

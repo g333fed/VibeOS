@@ -78,6 +78,47 @@ void kernel_main(void) {
     printf("  ╦  ╦╦╔╗ ╔═╗╔═╗╔═╗\n");
     printf("  ╚╗╔╝║╠╩╗║╣ ║ ║╚═╗\n");
     printf("   ╚╝ ╩╚═╝╚═╝╚═╝╚═╝\n");
+
+    // Debug: Check if MMU and D-cache are enabled
+    uint64_t sctlr;
+    asm volatile("mrs %0, sctlr_el1" : "=r"(sctlr));
+    printf("[DEBUG] SCTLR_EL1 = 0x%lx\n", sctlr);
+    printf("[DEBUG] MMU (M bit): %s\n", (sctlr & 1) ? "ENABLED" : "DISABLED");
+    printf("[DEBUG] D-Cache (C bit): %s\n", (sctlr & 4) ? "ENABLED" : "DISABLED");
+    printf("[DEBUG] I-Cache (I bit): %s\n", (sctlr & (1 << 12)) ? "ENABLED" : "DISABLED");
+    printf("[DEBUG] Framebuffer at: 0x%lx\n", (uint64_t)fb_base);
+    printf("[DEBUG] FB in cached region: %s\n",
+           ((uint64_t)fb_base < 0x3E000000) ? "YES" : "NO (device memory!)");
+
+#ifdef TARGET_PI
+    // Try enabling D-cache now that everything is initialized
+    printf("[DEBUG] Attempting to enable D-cache...\n");
+    extern void enable_dcache(void);
+    enable_dcache();
+
+    // Re-check
+    asm volatile("mrs %0, sctlr_el1" : "=r"(sctlr));
+    printf("[DEBUG] After enable: D-Cache (C bit): %s\n", (sctlr & 4) ? "ENABLED" : "DISABLED");
+#endif
+
+    // Quick cache benchmark: read a variable 1 million times
+    // With cache: should be ~1-2ms (variable in L1)
+    // Without cache: should be ~100-200ms (every read hits RAM)
+    {
+        volatile uint64_t test_var = 0x12345678;
+        volatile uint64_t sink = 0;
+        uint64_t start, end;
+        asm volatile("mrs %0, cntpct_el0" : "=r"(start));
+        for (int i = 0; i < 1000000; i++) {
+            sink = test_var;  // Read from memory
+        }
+        asm volatile("mrs %0, cntpct_el0" : "=r"(end));
+        uint64_t freq;
+        asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
+        uint64_t elapsed_us = ((end - start) * 1000000) / freq;
+        printf("[BENCH] 1M reads: %lu us (expect <5000 if cached)\n", elapsed_us);
+        (void)sink;  // Prevent optimization
+    }
     printf("\n");
     printf("VibeOS v0.1 - aarch64\n");
     printf("=====================\n\n");

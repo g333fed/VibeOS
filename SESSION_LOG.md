@@ -1559,3 +1559,24 @@ Session 44: USB Keyboard Working on Real Pi Hardware!
 - `kernel/kapi.c` - DMA function wiring
 - `user/lib/vibe.h` - DMA function pointers in userspace kapi
 - `user/bin/desktop.c` - DMA integration in flip_buffer and window blit
+
+## Session 41: D-Cache Coherency Fixes for Raspberry Pi
+
+  **Problem**: Pi boot broken after adding MMU with D-cache enabled. System crashed during USB enumeration.
+
+  **Root Causes & Fixes**:
+
+  1. **GPU Mailbox Coherency** - Mailbox buffers shared with GPU lacked cache maintenance:
+     - EMMC `prop_buf`: Added `cache_clean()` before send, `cache_invalidate()` after receive
+     - Framebuffer `mailbox_buffer`: Same fix
+     - USB `mbox_buf`: Same fix
+
+  2. **DMA Control Block** - `dma_cb` in dma.c needed `cache_clean_range()` before DMA starts
+
+  3. **Unsafe Cache Invalidate** - Changed all `dc ivac` to `dc civac` (clean-and-invalidate) because `dc ivac` on dirty lines has undefined behavior on ARM
+
+  4. **DMA Receive Buffer Bug** - `memset()` + `invalidate()` discarded the zeros. Fixed to `memset()` + `clean()` so zeros are flushed to RAM before DMA writes
+
+  5. **USB Polling Timing** - With D-cache, CPU runs faster. Fixed `usleep()` to use DSB barriers for reliable system timer reads. Increased poll delay to 50μs.
+
+  **Result**: Pi boots with D-cache enabled, ~100x faster memory access, USB keyboard/mouse working.

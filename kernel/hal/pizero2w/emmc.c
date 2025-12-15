@@ -77,6 +77,30 @@ static inline void mem_barrier(void) {
     __asm__ volatile("dsb sy" ::: "memory");
 }
 
+/* Cache maintenance for DMA/GPU coherency */
+#define CACHE_LINE_SIZE 64
+
+static void cache_clean(const void *start, uint32_t len) {
+    uintptr_t addr = (uintptr_t)start & ~(CACHE_LINE_SIZE - 1);
+    uintptr_t end = (uintptr_t)start + len;
+    while (addr < end) {
+        __asm__ volatile("dc cvac, %0" : : "r"(addr) : "memory");
+        addr += CACHE_LINE_SIZE;
+    }
+    __asm__ volatile("dsb sy" ::: "memory");
+}
+
+static void cache_invalidate(void *start, uint32_t len) {
+    uintptr_t addr = (uintptr_t)start & ~(CACHE_LINE_SIZE - 1);
+    uintptr_t end = (uintptr_t)start + len;
+    while (addr < end) {
+        // Use clean-and-invalidate - safer for dirty lines
+        __asm__ volatile("dc civac, %0" : : "r"(addr) : "memory");
+        addr += CACHE_LINE_SIZE;
+    }
+    __asm__ volatile("dsb sy" ::: "memory");
+}
+
 /* Simple microsecond delay (approximate, ~1GHz CPU) */
 static void delay_us(uint32_t us) {
     for (uint32_t i = 0; i < us * 300; i++) {
@@ -110,6 +134,8 @@ static int mbox_call(void) {
     /* Convert ARM address to bus address for GPU */
     uint32_t addr = ((uint32_t)(uint64_t)prop_buf) | 0xC0000000;
 
+    /* Clean cache so GPU sees our writes */
+    cache_clean((void *)prop_buf, sizeof(prop_buf));
     mem_barrier();
 
     /* Wait for mailbox to have space */
@@ -134,6 +160,9 @@ static int mbox_call(void) {
     }
 
     mem_barrier();
+    /* Invalidate cache so we see GPU's response */
+    cache_invalidate((void *)prop_buf, sizeof(prop_buf));
+
     return (prop_buf[1] == 0x80000000) ? 0 : -1;
 }
 

@@ -37,11 +37,14 @@ inline void dsb(void) {
 extern void sleep_ms(uint32_t ms);
 
 void usleep(uint32_t us) {
-    // For microsecond delays, use Pi system timer (1MHz free-running counter)
+    // Pi system timer (1MHz free-running counter) - in device memory, always uncached
     volatile uint32_t *systimer = (volatile uint32_t *)0x3F003004;
+    asm volatile("dsb sy" ::: "memory");  // Ensure previous writes complete
     uint32_t start = *systimer;
-    while ((*systimer - start) < us) {
-        asm volatile("nop");
+    while (1) {
+        asm volatile("dsb sy" ::: "memory");  // Ensure fresh timer read
+        uint32_t now = *systimer;
+        if ((now - start) >= us) break;
     }
 }
 
@@ -83,9 +86,11 @@ void invalidate_data_cache_range(uintptr_t start, size_t length) {
     uintptr_t addr = start & ~(step - 1);
     uintptr_t end = start + length;
 
-    // Invalidate data cache by virtual address to point of coherency
+    // Use clean-and-invalidate (dc civac) instead of just invalidate (dc ivac)
+    // This is safer because dc ivac on dirty lines has undefined behavior
+    // dc civac first writes back dirty data, then invalidates
     while (addr < end) {
-        asm volatile("dc ivac, %0" :: "r" (addr));
+        asm volatile("dc civac, %0" :: "r" (addr));
         addr += step;
     }
     asm volatile("dsb sy" ::: "memory");
@@ -143,10 +148,16 @@ int usb_set_power(int on) {
 
     mbox_buf[idx++] = 0;            // End tag
 
+    // Clean cache so GPU sees our writes
+    clean_data_cache_range((uintptr_t)mbox_buf, sizeof(mbox_buf));
     dmb();
+
     mbox_write(MAILBOX_CH_PROP, arm_to_bus((void *)mbox_buf));
     mbox_read(MAILBOX_CH_PROP);
     dmb();
+
+    // Invalidate cache so we see GPU's response
+    invalidate_data_cache_range((uintptr_t)mbox_buf, sizeof(mbox_buf));
 
     if (mbox_buf[1] != 0x80000000) {
         printf("[USB] Power control failed: %08x\n", mbox_buf[1]);

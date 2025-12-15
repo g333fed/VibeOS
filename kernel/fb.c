@@ -121,9 +121,32 @@ int fb_has_hw_double_buffer(void) {
     return (fb_buffer_height >= fb_height * 2);
 }
 
+// Clean CPU cache for a memory range (ARM64)
+// Required before GPU reads data written by CPU through cache
+#ifdef __aarch64__
+static void fb_cache_clean(void *start, uint32_t len) {
+    uintptr_t addr = (uintptr_t)start & ~63UL;  // Align to 64-byte cache line
+    uintptr_t end = (uintptr_t)start + len;
+    while (addr < end) {
+        asm volatile("dc cvac, %0" : : "r"(addr) : "memory");
+        addr += 64;
+    }
+    asm volatile("dsb sy" ::: "memory");
+}
+#else
+static void fb_cache_clean(void *start, uint32_t len) {
+    (void)start; (void)len;  // No-op on other architectures
+}
+#endif
+
 int fb_flip(int buffer) {
     if (!fb_has_hw_double_buffer()) return -1;
     if (buffer < 0 || buffer > 1) return -1;
+
+    // Clean cache for the buffer we're about to display
+    // The buffer being flipped TO is the one we've been drawing on (backbuffer)
+    uint32_t *flip_buffer = fb_base + (buffer ? fb_width * fb_height : 0);
+    fb_cache_clean(flip_buffer, fb_width * fb_height * sizeof(uint32_t));
 
     // Set the scroll offset to show the requested buffer
     uint32_t y_offset = buffer ? fb_height : 0;
