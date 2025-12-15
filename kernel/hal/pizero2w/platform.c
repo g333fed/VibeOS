@@ -5,12 +5,21 @@
 #include "../hal.h"
 #include "usb/usb_types.h"
 
+// Pi system timer (1MHz free-running counter)
+#define PI_SYSTIMER_LO  (*(volatile uint32_t *)0x3F003004)
+
 const char *hal_platform_name(void) {
     return "Raspberry Pi Zero 2W";
 }
 
 void hal_wfi(void) {
     asm volatile("wfi");
+}
+
+// Microsecond timer - reads directly from Pi system timer
+// Available very early in boot, no initialization required
+uint32_t hal_get_time_us(void) {
+    return PI_SYSTIMER_LO;
 }
 
 // CPU Info - BCM2710 with Cortex-A53 cores

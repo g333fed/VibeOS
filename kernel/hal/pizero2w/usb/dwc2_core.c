@@ -5,6 +5,7 @@
 
 #include "dwc2_core.h"
 #include "dwc2_regs.h"
+#include "../../hal.h"
 #include "../../../printf.h"
 #include "../../../string.h"
 
@@ -37,14 +38,9 @@ inline void dsb(void) {
 extern void sleep_ms(uint32_t ms);
 
 void usleep(uint32_t us) {
-    // Pi system timer (1MHz free-running counter) - in device memory, always uncached
-    volatile uint32_t *systimer = (volatile uint32_t *)0x3F003004;
-    asm volatile("dsb sy" ::: "memory");  // Ensure previous writes complete
-    uint32_t start = *systimer;
-    while (1) {
-        asm volatile("dsb sy" ::: "memory");  // Ensure fresh timer read
-        uint32_t now = *systimer;
-        if ((now - start) >= us) break;
+    uint32_t start = hal_get_time_us();
+    while ((hal_get_time_us() - start) < us) {
+        // Busy wait
     }
 }
 
@@ -108,20 +104,34 @@ uint32_t arm_to_bus(void *ptr) {
 // Mailbox Functions
 // ============================================================================
 
-static void mbox_write(uint32_t channel, uint32_t data) {
+static int mbox_write(uint32_t channel, uint32_t data) {
+    // 1 second timeout
+    uint32_t start = hal_get_time_us();
     while (MAILBOX_STATUS & MAILBOX_FULL) {
         dmb();
+        if ((hal_get_time_us() - start) > 1000000) {
+            printf("[USB] mbox_write: timeout waiting for mailbox\n");
+            return -1;
+        }
     }
     dmb();
     MAILBOX_WRITE = (data & 0xFFFFFFF0) | (channel & 0xF);
     dmb();
+    return 0;
 }
 
 static uint32_t mbox_read(uint32_t channel) {
     uint32_t data;
-    while (1) {
+    // 1 second timeout
+    uint32_t start = hal_get_time_us();
+
+    while ((hal_get_time_us() - start) < 1000000) {
         while (MAILBOX_STATUS & MAILBOX_EMPTY) {
             dmb();
+            if ((hal_get_time_us() - start) > 1000000) {
+                printf("[USB] mbox_read: timeout waiting for data\n");
+                return 0xFFFFFFFF;
+            }
         }
         dmb();
         data = MAILBOX_READ;
@@ -130,6 +140,8 @@ static uint32_t mbox_read(uint32_t channel) {
             return data & 0xFFFFFFF0;
         }
     }
+    printf("[USB] mbox_read: timeout, wrong channel\n");
+    return 0xFFFFFFFF;
 }
 
 int usb_set_power(int on) {

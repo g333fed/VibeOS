@@ -87,6 +87,13 @@ uint64_t hal_get_ram_size(void);
 void hal_wfi(void);             // Wait for interrupt
 
 /*
+ * Microsecond Timer (for timeouts)
+ * Returns current time in microseconds from a free-running counter
+ * Available very early in boot (before kernel timer is initialized)
+ */
+uint32_t hal_get_time_us(void);
+
+/*
  * USB (Optional - not all platforms support this)
  * Returns 0 on success, -1 if not supported/failed
  */

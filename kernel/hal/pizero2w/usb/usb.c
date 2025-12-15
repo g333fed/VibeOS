@@ -77,6 +77,13 @@ int hal_usb_init(void) {
     usb_state.initialized = 1;
     printf("[USB] USB initialization complete!\n");
 
+    // Warn if no keyboard detected (debug mode hangs in usb_keyboard_debug_loop)
+#ifndef PI_DEBUG_MODE
+    if (usb_state.keyboard_addr == 0) {
+        printf("[USB] Warning: No keyboard detected, continuing without keyboard\n");
+    }
+#endif
+
     // Setup USB interrupts if we have keyboard or mouse
     if (usb_state.keyboard_addr || usb_state.mouse_addr) {
         if (usb_state.keyboard_addr) {

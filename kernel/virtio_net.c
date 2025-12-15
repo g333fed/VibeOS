@@ -210,10 +210,15 @@ int virtio_net_init(void) {
 
     printf("[NET] Found virtio-net at device slot %d\n", net_device_index);
 
-    // Reset device
+    // Reset device (with timeout to prevent hang)
     write32(net_base + VIRTIO_MMIO_STATUS/4, 0);
-    while (read32(net_base + VIRTIO_MMIO_STATUS/4) != 0) {
+    int timeout = 100000;
+    while (read32(net_base + VIRTIO_MMIO_STATUS/4) != 0 && --timeout > 0) {
         asm volatile("nop");
+    }
+    if (timeout == 0) {
+        printf("[NET] Device reset timeout\n");
+        return -1;
     }
 
     // Acknowledge and set driver

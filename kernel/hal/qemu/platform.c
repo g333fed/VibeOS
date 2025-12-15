@@ -12,6 +12,16 @@ void hal_wfi(void) {
     asm volatile("wfi");
 }
 
+// Microsecond timer using ARM generic timer
+uint32_t hal_get_time_us(void) {
+    uint64_t cnt, freq;
+    asm volatile("mrs %0, cntpct_el0" : "=r"(cnt));
+    asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
+    // Convert to microseconds: cnt * 1000000 / freq
+    // To avoid overflow, divide first (loses some precision but ok for timeouts)
+    return (uint32_t)((cnt * 1000000ULL) / freq);
+}
+
 // QEMU uses virtio for input, not USB
 int hal_usb_init(void) {
     return -1;  // Not supported on QEMU virt

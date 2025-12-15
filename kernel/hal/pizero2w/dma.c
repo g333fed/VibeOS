@@ -11,6 +11,9 @@
 #include "../hal.h"
 #include <stdint.h>
 
+// Forward declaration for debug output
+extern int printf(const char *fmt, ...);
+
 // DMA peripheral base address (Pi Zero 2W / BCM2837)
 #define DMA_BASE            0x3F007000
 
@@ -148,9 +151,14 @@ int hal_dma_init(void) {
     dma_write(FB_DMA_CHANNEL, DMA_CS, DMA_CS_RESET);
     dmb();
 
-    // Wait for reset to complete (bit auto-clears)
+    // Wait for reset to complete (bit auto-clears) with timeout
+    uint32_t start = hal_get_time_us();
     while (dma_read(FB_DMA_CHANNEL, DMA_CS) & DMA_CS_RESET) {
         dmb();
+        if ((hal_get_time_us() - start) > 1000000) {  // 1 second
+            printf("[DMA] hal_dma_init: DMA reset timeout\n");
+            return -1;
+        }
     }
 
     // Clear any pending interrupts/errors
@@ -161,15 +169,23 @@ int hal_dma_init(void) {
     return 0;
 }
 
-// Wait for DMA transfer to complete
-static void dma_wait(int channel) {
+// Wait for DMA transfer to complete (with timeout to prevent hangs)
+static int dma_wait(int channel) {
+    uint32_t start = hal_get_time_us();
     dmb();
     while (dma_read(channel, DMA_CS) & DMA_CS_ACTIVE) {
         dmb();
+        if ((hal_get_time_us() - start) > 5000000) {  // 5 second timeout for large transfers
+            printf("[DMA] dma_wait: DMA completion timeout\n");
+            dma_write(channel, DMA_CS, DMA_CS_END);
+            dmb();
+            return -1;
+        }
     }
     // Clear END flag
     dma_write(channel, DMA_CS, DMA_CS_END);
     dmb();
+    return 0;
 }
 
 // Simple 1D memory copy via DMA

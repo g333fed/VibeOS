@@ -63,23 +63,34 @@ void rtc_timestamp_to_datetime(uint32_t timestamp, datetime_t *dt) {
     // Day of week (Jan 1, 1970 was Thursday = 4)
     dt->weekday = (days + 4) % 7;
 
-    // Calculate year
+    // Calculate year (with bounds to prevent infinite loop on corrupted RTC)
     int year = 1970;
-    while (1) {
+    int max_years = 10000;  // Reasonable upper bound (year 11970)
+    while (max_years-- > 0) {
         int days_in_year = is_leap_year(year) ? 366 : 365;
         if (days < (uint32_t)days_in_year) break;
         days -= days_in_year;
         year++;
     }
+    if (max_years == 0) {
+        printf("[RTC] Warning: year calculation overflow\n");
+        year = 1970;  // Reset to epoch on overflow
+    }
     dt->year = year;
 
-    // Calculate month and day
+    // Calculate month and day (with bounds)
     int month = 1;
-    while (1) {
+    int max_months = 12;
+    while (max_months-- > 0) {
         int dim = get_days_in_month(year, month);
         if (days < (uint32_t)dim) break;
         days -= dim;
         month++;
+    }
+    if (max_months == 0) {
+        printf("[RTC] Warning: month calculation overflow\n");
+        month = 1;
+        days = 0;
     }
     dt->month = month;
     dt->day = days + 1;  // Days are 1-indexed

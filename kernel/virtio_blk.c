@@ -153,10 +153,15 @@ int virtio_blk_init(void) {
         return -1;
     }
 
-    // Reset device
+    // Reset device (with timeout to prevent hang)
     write32(blk_base + VIRTIO_MMIO_STATUS/4, 0);
-    while (read32(blk_base + VIRTIO_MMIO_STATUS/4) != 0) {
+    int timeout = 100000;
+    while (read32(blk_base + VIRTIO_MMIO_STATUS/4) != 0 && --timeout > 0) {
         asm volatile("nop");
+    }
+    if (timeout == 0) {
+        printf("[BLK] Device reset timeout\n");
+        return -1;
     }
 
     // Acknowledge and set driver

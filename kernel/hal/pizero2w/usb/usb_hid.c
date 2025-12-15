@@ -726,8 +726,9 @@ void hal_usb_keyboard_tick(void) {
         if (HCCHAR(1) & HCCHAR_CHENA) {
             HCCHAR(1) |= HCCHAR_CHDIS;
             dsb();
-            // Wait for halt
-            for (int i = 0; i < 1000; i++) {
+            // Wait for halt (with longer timeout to prevent hardware race)
+            for (int i = 0; i < 100000; i++) {
+                dsb();
                 if (HCINT(1) & HCINT_CHHLTD) break;
             }
             HCINT(1) = 0xFFFFFFFF;
@@ -772,7 +773,9 @@ void hal_usb_keyboard_tick(void) {
         if (HCCHAR(2) & HCCHAR_CHENA) {
             HCCHAR(2) |= HCCHAR_CHDIS;
             dsb();
-            for (int i = 0; i < 1000; i++) {
+            // Wait for halt (with longer timeout to prevent hardware race)
+            for (int i = 0; i < 100000; i++) {
+                dsb();
                 if (HCINT(2) & HCINT_CHHLTD) break;
             }
             HCINT(2) = 0xFFFFFFFF;

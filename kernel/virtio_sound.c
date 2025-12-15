@@ -373,10 +373,15 @@ int virtio_sound_init(void) {
 
     printf("[SND] Found virtio-sound at device %d\n", snd_device_index);
 
-    // Reset device
+    // Reset device (with timeout to prevent hang)
     write32(snd_base + VIRTIO_MMIO_STATUS/4, 0);
-    while (read32(snd_base + VIRTIO_MMIO_STATUS/4) != 0) {
+    int reset_timeout = 100000;
+    while (read32(snd_base + VIRTIO_MMIO_STATUS/4) != 0 && --reset_timeout > 0) {
         asm volatile("nop");
+    }
+    if (reset_timeout == 0) {
+        printf("[SND] Device reset timeout\n");
+        return -1;
     }
 
     // Acknowledge and set driver

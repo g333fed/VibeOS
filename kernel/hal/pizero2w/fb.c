@@ -107,27 +107,39 @@ static void debug_hex(uint32_t val) {
     }
 }
 
-// Write to mailbox
-static void mailbox_write(uint32_t channel, uint32_t data) {
-    // Wait until mailbox is not full
+// Write to mailbox (with timeout to prevent hangs)
+static int mailbox_write(uint32_t channel, uint32_t data) {
+    // Wait until mailbox is not full (1 second timeout)
+    uint32_t start = hal_get_time_us();
     while (MAILBOX_STATUS & MAILBOX_FULL) {
         dmb();
+        if ((hal_get_time_us() - start) > 1000000) {  // 1 second
+            debug_puts("[HAL/FB] mailbox_write: timeout waiting for mailbox\n");
+            return -1;
+        }
     }
     dmb();
 
     // Write address (upper 28 bits) | channel (lower 4 bits)
     MAILBOX_WRITE = (data & 0xFFFFFFF0) | (channel & 0xF);
     dmb();
+    return 0;
 }
 
-// Read from mailbox
+// Read from mailbox (with timeout to prevent hangs)
 static uint32_t mailbox_read(uint32_t channel) {
     uint32_t data;
+    // 1 second total timeout
+    uint32_t start = hal_get_time_us();
 
-    while (1) {
+    while ((hal_get_time_us() - start) < 1000000) {  // 1 second
         // Wait until mailbox is not empty
         while (MAILBOX_STATUS & MAILBOX_EMPTY) {
             dmb();
+            if ((hal_get_time_us() - start) > 1000000) {
+                debug_puts("[HAL/FB] mailbox_read: timeout waiting for data\n");
+                return 0xFFFFFFFF;
+            }
         }
         dmb();
 
@@ -139,6 +151,8 @@ static uint32_t mailbox_read(uint32_t channel) {
             return data & 0xFFFFFFF0;
         }
     }
+    debug_puts("[HAL/FB] mailbox_read: timeout, wrong channel\n");
+    return 0xFFFFFFFF;
 }
 
 // Convert ARM physical address to bus address for GPU
