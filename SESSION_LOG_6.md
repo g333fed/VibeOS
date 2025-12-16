@@ -287,3 +287,94 @@ if (kernel_context.pc == 0 || kernel_context.sp == 0) { ... }
 1. **Memory layout matters** - Programs need reserved space, not just leftovers after heap
 2. **Know your memory map** - Kernel code at 0x0 (flash) vs data at 0x40000000 (RAM)
 3. **Debug prints first, cleanup later** - Don't remove diagnostics until fix is verified
+
+---
+
+## Session 58: MicroPython Script Files + Full API Port
+
+**Goal**: Run .py files from disk and expose the entire kernel API to Python.
+
+### Script File Execution
+
+Implemented `micropython script.py` support:
+
+1. **`mp_lexer_new_from_file()`** - Opens files from VFS, reads contents, creates lexer
+2. **`mp_import_stat()`** - Checks if paths exist (file vs directory)
+3. **CRLF handling** - Strip `\r` characters (FAT32 files from macOS have CRLF line endings)
+
+**Bug Found**: `vibe.yield()` caused syntax error!
+- `yield` is a Python keyword (for generators)
+- Renamed to `vibe.sched_yield()`
+
+### Full API Port
+
+Ported the ENTIRE kapi to Python bindings in `modvibe.c`:
+
+**Console I/O** (7 functions):
+- `putc`, `puts`, `clear`, `set_color`, `set_cursor`, `set_cursor_enabled`, `console_size`
+
+**Filesystem** (12 functions):
+- `open`, `read`, `write`, `file_size`, `is_dir`, `create`, `mkdir`, `delete`, `rename`, `listdir`, `getcwd`, `chdir`
+
+**Process** (5 functions):
+- `exit`, `exec`, `spawn`, `kill`, `ps`
+
+**Graphics** (5 functions):
+- `put_pixel`, `fill_rect`, `draw_char`, `draw_string`, `screen_size`
+
+**Mouse** (2 functions):
+- `mouse_pos`, `mouse_buttons`
+
+**Windows** (6 functions):
+- `window_create`, `window_destroy`, `window_poll`, `window_invalidate`, `window_set_title`, `window_size`
+
+**Sound** (5 functions):
+- `sound_play`, `sound_stop`, `sound_pause`, `sound_resume`, `sound_is_playing`
+
+**Networking** (11 functions):
+- `dns_resolve`, `ping`, `get_ip`
+- `tcp_connect`, `tcp_send`, `tcp_recv`, `tcp_close`
+- `tls_connect`, `tls_send`, `tls_recv`, `tls_close`
+
+**System Info** (6 functions):
+- `mem_free`, `mem_used`, `ram_total`, `disk_total`, `disk_free`, `cpu_info`
+
+**Other** (4 functions):
+- `usb_devices`, `led_on`, `led_off`, `led_toggle`
+
+**RTC** (2 functions):
+- `timestamp`, `datetime`
+
+**Constants**:
+- Colors: `BLACK`, `WHITE`, `RED`, `GREEN`, `BLUE`, `YELLOW`, `CYAN`, `MAGENTA`, `AMBER`
+- Window events: `WIN_EVENT_NONE`, `WIN_EVENT_MOUSE_DOWN`, `WIN_EVENT_MOUSE_UP`, `WIN_EVENT_MOUSE_MOVE`, `WIN_EVENT_KEY`, `WIN_EVENT_CLOSE`, `WIN_EVENT_FOCUS`, `WIN_EVENT_UNFOCUS`
+- Mouse buttons: `MOUSE_LEFT`, `MOUSE_RIGHT`, `MOUSE_MIDDLE`
+
+### Test Suite
+
+Created `python/test_api.py` - comprehensive test of all bindings:
+- Tests each API category
+- Color-coded output (green OK, red FAIL)
+- Lists filesystem, processes, USB devices
+- Checks DNS resolution
+- All tests pass!
+
+### Files Modified
+- `micropython/ports/vibeos/main.c` - Script execution, CRLF handling
+- `micropython/ports/vibeos/modvibe.c` - Full API (198 → 857 lines)
+- `python/*.py` - Updated `yield` → `sched_yield`
+- `Makefile` - Detect MicroPython source changes
+
+### What This Enables
+
+Python can now:
+- Read/write files on disk
+- List directories, navigate filesystem
+- Spawn processes, view process list
+- Create windows, handle events
+- Play sounds
+- Make HTTP/HTTPS requests (via TCP/TLS)
+- Query system info (CPU, RAM, disk)
+- Full graphics (pixels, rectangles, text)
+
+**Next**: Rewrite the browser in Python! The full API makes this possible.
