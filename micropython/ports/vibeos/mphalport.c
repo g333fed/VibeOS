@@ -29,6 +29,22 @@ static char escape_buf[8];
 static int escape_idx = 0;
 static int escape_len = 0;
 
+// Helper to check if there's a key (use stdio hook if available)
+static int mp_has_key(void) {
+    if (mp_vibeos_api->stdio_has_key) {
+        return mp_vibeos_api->stdio_has_key();
+    }
+    return mp_vibeos_api->has_key();
+}
+
+// Helper to get a character (use stdio hook if available)
+static int mp_getc(void) {
+    if (mp_vibeos_api->stdio_getc) {
+        return mp_vibeos_api->stdio_getc();
+    }
+    return mp_vibeos_api->getc();
+}
+
 // Read one character from keyboard (blocking)
 int mp_hal_stdin_rx_chr(void) {
     // If we have buffered escape sequence chars, return them
@@ -38,11 +54,11 @@ int mp_hal_stdin_rx_chr(void) {
     escape_idx = 0;
     escape_len = 0;
 
-    // Wait for key
-    while (!mp_vibeos_api->has_key()) {
+    // Wait for key (use stdio hook if available)
+    while (!mp_has_key()) {
         mp_vibeos_api->yield();
     }
-    int c = mp_vibeos_api->getc();
+    int c = mp_getc();
 
     // VibeOS keyboard sends '\n' for Enter, but MicroPython readline expects '\r'
     if (c == '\n') {
@@ -100,10 +116,19 @@ int mp_hal_stdin_rx_chr(void) {
     return c;
 }
 
+// Helper to output a character (use stdio hook if available)
+static void mp_putc(char c) {
+    if (mp_vibeos_api->stdio_putc) {
+        mp_vibeos_api->stdio_putc(c);
+    } else {
+        mp_vibeos_api->putc(c);
+    }
+}
+
 // Write string to console
 mp_uint_t mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
     for (mp_uint_t i = 0; i < len; i++) {
-        mp_vibeos_api->putc(str[i]);
+        mp_putc(str[i]);
     }
     return len;
 }

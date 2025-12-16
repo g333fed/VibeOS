@@ -221,8 +221,12 @@ int main(kapi_t *api, int argc, char **argv) {
         api->free(buf);
     } else {
         // Interactive REPL
-        api->puts("MicroPython for VibeOS\n");
-        api->puts(">>> ");
+        // Use stdio hooks if available (for terminal emulator)
+        if (api->stdio_puts) {
+            api->stdio_puts("MicroPython for VibeOS\n");
+        } else {
+            api->puts("MicroPython for VibeOS\n");
+        }
         pyexec_friendly_repl();
     }
 
