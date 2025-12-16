@@ -219,3 +219,71 @@ Priority order for expanding Python capabilities:
 
 7. **TrueType fonts** - Render text with TTF from Python
    - GUI applications with nice fonts
+
+---
+
+## Session 57: MicroPython Memory Layout Bug
+
+**Problem**: MicroPython (and eventually all processes) crashed on exit with corrupted `kernel_context`.
+
+### Symptoms
+- `sys.exit()` crashed and rebooted the system
+- Ctrl+D also crashed
+- Debug output showed `kernel_context` with suspicious values:
+  - `pc=0x12ce0` (small address)
+  - `sp=0x5efffe80` (near kernel stack)
+
+### Investigation
+1. Added debug prints to track `kernel_context` state at process exit
+2. Found MicroPython was loading at `0x5ef20000-0x5f143afc` (ending ABOVE the kernel stack at `0x5f000000`)
+3. Root cause: **heap consumed ALL available RAM**, pushing program load area to overlap with kernel stack
+
+### Memory Layout Bug
+The kernel heap was calculated to extend nearly to the stack:
+```c
+heap_max = KERNEL_STACK_TOP - STACK_BUFFER;  // Only 1MB buffer
+```
+
+Programs load at `ALIGN_64K(heap_end)`, which was ~`0x5ef00000`. MicroPython's 2.2MB binary (130KB code + 2MB BSS heap) extended past the kernel stack at `0x5f000000`.
+
+### Fix
+Reserved 64MB for program area between heap and stack:
+```c
+uint64_t program_reserve = 64 * 1024 * 1024;  // 64MB for programs
+uint64_t heap_max = KERNEL_STACK_TOP - STACK_BUFFER - program_reserve;
+```
+
+New layout:
+- Heap: `0x402d2430 - 0x5af00000` (~430MB)
+- Program area: `0x5af00000 - 0x5f000000` (~80MB)
+- Stack: `0x5f000000`
+
+### False Alarm: "Corrupted" Context
+After fixing memory layout, still saw "corruption" errors. Investigation revealed:
+- Kernel CODE lives at `0x0` (flash), not `0x40000000` (RAM)
+- `pc=0x12cf0` is INSIDE `process_schedule` (at `0x129c0`) - **VALID**
+- `sp=0x5efffe80` is kernel stack minus 384 bytes - **VALID**
+
+The sanity check was wrong:
+```c
+// WRONG: kernel code is in flash at 0x0, not RAM
+if (kernel_context.pc < 0x40000000) { ... }
+
+// FIXED: only check for NULL
+if (kernel_context.pc == 0 || kernel_context.sp == 0) { ... }
+```
+
+### Files Modified
+- `kernel/memory.c` - Reserve program area, add heap debug print
+- `kernel/process.c` - Fix sanity check for flash-based kernel code
+
+### Improvements Made Along the Way
+- `micropython/ports/vibeos/main.c`:
+  - Aligned heap to 16 bytes: `__attribute__((aligned(16)))`
+  - Better stack tracking for GC using inline asm
+  - Sanity check in `gc_collect()` to prevent invalid memory scans
+
+### Lessons Learned
+1. **Memory layout matters** - Programs need reserved space, not just leftovers after heap
+2. **Know your memory map** - Kernel code at 0x0 (flash) vs data at 0x40000000 (RAM)
+3. **Debug prints first, cleanup later** - Don't remove diagnostics until fix is verified

@@ -62,6 +62,7 @@ void process_init(void) {
 
     printf("[PROC] Process subsystem initialized (max %d processes)\n", MAX_PROCESSES);
     printf("[PROC] Program load area: 0x%lx+\n", program_base);
+    printf("[PROC] kernel_context at: 0x%lx\n", (uint64_t)&kernel_context);
 }
 
 // Find a free slot in the process table
@@ -227,8 +228,10 @@ int process_create(const char *path, int argc, char **argv) {
     proc->context.x[21] = (uint64_t)argc;     // x21 = argc
     proc->context.x[22] = (uint64_t)argv;     // x22 = argv
 
-    printf("[PROC] Created process '%s' pid=%d at 0x%lx (slot %d)\n",
-           proc->name, proc->pid, proc->load_base, slot);
+    printf("[PROC] Created process '%s' pid=%d at 0x%lx-0x%lx (slot %d)\n",
+           proc->name, proc->pid, proc->load_base, proc->load_base + proc->load_size, slot);
+    printf("[PROC] Stack at 0x%lx-0x%lx\n",
+           (uint64_t)proc->stack_base, (uint64_t)proc->stack_base + proc->stack_size);
 
     return proc->pid;
 }
@@ -305,6 +308,18 @@ void process_exit(int status) {
     // This MUST not return - we context switch away
     current_pid = -1;
     current_process = NULL;
+
+    // Debug: verify kernel_context before switching
+    printf("[PROC] Switching to kernel_context: pc=0x%lx sp=0x%lx pstate=0x%lx\n",
+           kernel_context.pc, kernel_context.sp, kernel_context.pstate);
+
+    // Sanity check kernel_context
+    // Note: kernel code is in flash at 0x0, stack is near 0x5f000000
+    if (kernel_context.pc == 0 || kernel_context.sp == 0) {
+        printf("[PROC] ERROR: kernel_context appears corrupted!\n");
+        printf("[PROC] This indicates memory corruption during process execution\n");
+        while(1);  // Hang instead of crashing
+    }
 
     // Switch directly back to kernel context
     // This will resume in process_exec_args() or process_schedule()
@@ -398,9 +413,21 @@ void process_schedule(void) {
     // If old_pid == -1, we're switching FROM kernel context
     // IRQs stay disabled - new process will enable them (entry_wrapper or return path)
     cpu_context_t *old_ctx = (old_pid >= 0) ? &old_proc->context : &kernel_context;
+
+    // Debug: if switching from kernel, verify kernel_context after we return
+    int was_kernel = (old_pid < 0);
+
     context_switch(old_ctx, &new_proc->context);
 
     // We return here when someone switches back to us
+    // Verify kernel_context wasn't corrupted during process execution
+    if (was_kernel) {
+        if (kernel_context.pc < 0x40000000 || kernel_context.sp < 0x40000000) {
+            printf("[PROC] WARNING: kernel_context corrupted after process ran!\n");
+            printf("[PROC] pc=0x%lx sp=0x%lx\n", kernel_context.pc, kernel_context.sp);
+        }
+    }
+
     asm volatile("msr daifclr, #2" ::: "memory");  // Re-enable IRQs
 }
 

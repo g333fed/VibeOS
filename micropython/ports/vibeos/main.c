@@ -15,7 +15,8 @@
 kapi_t *mp_vibeos_api;
 
 // Heap for MicroPython's garbage collector
-static char heap[MICROPY_HEAP_SIZE];
+// Must be aligned for pointer-sized access (GC stores pointers in heap)
+static char heap[MICROPY_HEAP_SIZE] __attribute__((aligned(16)));
 
 // Stack tracking
 static char *stack_top;
@@ -24,7 +25,13 @@ static char *stack_top;
 void gc_collect(void) {
     void *dummy;
     gc_collect_start();
-    gc_collect_root(&dummy, ((mp_uint_t)stack_top - (mp_uint_t)&dummy) / sizeof(mp_uint_t));
+    // Sanity check: stack grows down on ARM64, so stack_top should be > &dummy
+    // Also limit scan to reasonable size (1MB max) to prevent corruption issues
+    mp_uint_t top = (mp_uint_t)stack_top;
+    mp_uint_t cur = (mp_uint_t)&dummy;
+    if (top > cur && (top - cur) < (1024 * 1024)) {
+        gc_collect_root(&dummy, (top - cur) / sizeof(mp_uint_t));
+    }
     gc_collect_end();
 }
 
@@ -63,9 +70,11 @@ void __assert_func(const char *file, int line, const char *func, const char *exp
 int main(kapi_t *api, int argc, char **argv) {
     mp_vibeos_api = api;
 
-    // Track stack for GC
-    int stack_dummy;
-    stack_top = (char *)&stack_dummy;
+    // Track stack for GC - capture SP at very start of main
+    // Use inline asm to get actual stack pointer value
+    char *sp_val;
+    asm volatile("mov %0, sp" : "=r" (sp_val));
+    stack_top = sp_val;
 
     // Initialize MicroPython
     mp_stack_ctrl_init();

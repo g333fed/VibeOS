@@ -74,17 +74,27 @@ void memory_init(void) {
     // Add 64KB buffer after BSS for safety
     heap_start = ALIGN_UP((uint64_t)&_bss_end + 0x10000, 16);
 
-    // Heap ends before the stack (with buffer)
-    // Stack is at fixed address, so heap must stay below it
+    // Heap ends well before the stack - leave room for programs!
+    // Programs load after heap_end, so we need to reserve space.
+    // Reserve at least 64MB for program area (between heap and stack)
     uint64_t ram_end = ram_base + ram_size;
-    uint64_t heap_max = KERNEL_STACK_TOP - STACK_BUFFER;
+    uint64_t program_reserve = 64 * 1024 * 1024;  // 64MB for programs
+    uint64_t heap_max = KERNEL_STACK_TOP - STACK_BUFFER - program_reserve;
 
     // But also can't exceed actual RAM
-    if (heap_max > ram_end) {
-        heap_max = ram_end - STACK_BUFFER;
+    if (heap_max > ram_end - program_reserve) {
+        heap_max = ram_end - STACK_BUFFER - program_reserve;
+    }
+
+    // Sanity: heap must be at least 64MB
+    if (heap_max < heap_start + 64 * 1024 * 1024) {
+        heap_max = heap_start + 64 * 1024 * 1024;
     }
 
     heap_end = heap_max;
+
+    printf("[MEM] heap: 0x%lx - 0x%lx, stack at 0x%lx\n",
+           heap_start, heap_end, (uint64_t)KERNEL_STACK_TOP);
 
     // Initialize with one giant free block
     free_list = (block_header_t *)heap_start;
