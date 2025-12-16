@@ -668,3 +668,104 @@ tcc hello.c -o hello
 3. **PIE is essential** - VibeOS loads programs at dynamic addresses, fixed vaddr breaks everything
 4. **Debug output to UART** - Console output may not work during compilation, use `kapi->uart_puts`
 5. **TCC's architecture** - Clean separation of compiler core vs platform support
+
+---
+
+## Session 41: VibeCode IDE
+
+**Date**: December 16, 2024
+
+After getting TCC working, built a full IDE for VibeOS - "VibeCode".
+
+### Features Implemented
+
+1. **File Tree Sidebar**
+   - Browse files in current project directory
+   - Click to open files
+   - New File input appears inline at top
+
+2. **Code Editor**
+   - Full text editing with cursor navigation
+   - Vertical and horizontal scrolling with scrollbars
+   - Line numbers in gutter
+   - C and Python syntax highlighting:
+     - Keywords (blue)
+     - Comments (green)
+     - Strings (red)
+     - Numbers (purple)
+     - Function calls (teal)
+     - Decorators (orange, Python)
+
+3. **Auto-closing Brackets**
+   - `(` → `()`
+   - `[` → `[]`
+   - `{` → `{}`
+   - `"` → `""`
+   - `'` → `''`
+   - Cursor positioned between pair
+
+4. **Output Panel**
+   - Shows program output when Run is clicked
+   - Scrollable with scrollbar
+   - Auto-scrolls to bottom on new output
+
+5. **Toolbar**
+   - New - Create new file (clears buffer)
+   - Save - Save current file (Ctrl+S)
+   - Run - Execute with TCC (.c) or MicroPython (.py) (Ctrl+R)
+   - Help - Toggle API reference panel (Escape)
+
+6. **Welcome Screen**
+   - VS Code style startup screen
+   - Create Project - Makes directory in /home/user/
+   - Open Project - Enter path to open
+
+7. **Help Panel**
+   - Embedded API quick reference
+   - Keyboard shortcuts
+   - Basic vibe.h usage examples
+
+### Quality of Life Additions
+
+**Smart I/O Helpers** (vibe.h):
+```c
+vibe_puts(k, "text");      // Auto-uses stdio hooks in terminal
+vibe_putc(k, 'x');
+vibe_getc(k);
+vibe_has_key(k);
+vibe_print_int(k, 42);
+vibe_print_hex(k, 0xDEAD);
+vibe_print_size(k, bytes); // Human-readable (KB, MB, GB)
+```
+
+These eliminate the boilerplate `out_putc`/`out_puts` functions every program needed.
+
+**API Documentation** (docs/api.md):
+- Complete VibeOS programming guide
+- Console I/O, memory, filesystem, windows, networking, sound
+- All function signatures with examples
+
+### Files Created
+- `user/bin/vibecode.c` - Full IDE (~1600 lines)
+- `docs/api.md` - Programming guide
+
+### Files Modified
+- `user/lib/vibe.h` - Added vibe_* smart I/O helpers
+- `user/lib/icons.h` - Added VibeCode icon (32x32 bitmap)
+- `user/bin/desktop.c` - Added VibeCode to dock
+- `user/bin/ls.c` - Updated to use vibe_puts
+- `Makefile` - Added vibecode to USER_PROGS
+
+### UI Design
+- Classic Mac black & white aesthetic throughout
+- No garish colors (removed green Run button, blue Help)
+- Striped title bars on dialogs (System 7 style)
+- Inverted buttons on hover
+
+### Keyboard Shortcuts
+- Ctrl+S - Save
+- Ctrl+R - Run
+- Ctrl+N - New file
+- Escape - Toggle help panel
+- Tab - Insert 4 spaces
+- Arrow keys, Home, End, PgUp, PgDn - Navigation
