@@ -66,7 +66,7 @@ HAL_USB_C_SRCS = $(wildcard $(HAL_DIR)/$(HAL_PLATFORM)/usb/*.c)
 # Userspace programs (single-file)
 USER_PROGS = snake tetris desktop calc vibesh echo ls cat pwd mkdir touch rm term uptime sysmon textedit files date play music ping fetch viewer vim led \
              clear yes sleep seq whoami hostname uname which basename dirname \
-             head tail wc df free ps stat grep find hexdump du cp mv kill lscpu lsusb dmesg mousetest readtest vibecode browser
+             head tail wc df free ps stat grep find hexdump du cp mv kill lscpu lsusb dmesg mousetest readtest vibecode browser explode
 
 # Object files
 BOOT_OBJ = $(BUILD_DIR)/boot.o
@@ -177,11 +177,18 @@ $(SYSROOT)/bin/tcc: $(wildcard tinycc/vibeos/*.c) $(wildcard tinycc/vibeos/*.h)
 	cp tinycc/vibeos/build/tcc $@
 	@echo "  Built /bin/tcc"
 
+# DOOM (external build)
+$(SYSROOT)/bin/doom: $(wildcard user/bin/doom/*.c) $(wildcard user/bin/doom/*.h)
+	@echo "Building DOOM..."
+	$(MAKE) -C user/bin/doom
+	cp user/bin/doom/build/doom $@
+	@echo "  Built /bin/doom"
+
 # CRT files for TCC
 CRT_FILES = $(BUILD_DIR)/user/crt0.o $(BUILD_DIR)/user/crti.o $(BUILD_DIR)/user/crtn.o
 
 # Build all userspace programs
-USER_BINS = $(patsubst %,$(SYSROOT)/bin/%,$(USER_PROGS)) $(SYSROOT)/bin/micropython $(SYSROOT)/bin/tcc $(SYSROOT)/bin/browser.py
+USER_BINS = $(patsubst %,$(SYSROOT)/bin/%,$(USER_PROGS)) $(SYSROOT)/bin/micropython $(SYSROOT)/bin/tcc $(SYSROOT)/bin/doom $(SYSROOT)/bin/browser.py
 
 # Copy Python browser script
 $(SYSROOT)/bin/browser.py: $(USER_DIR)/bin/browser.py
@@ -213,6 +220,7 @@ sync-disk: user $(DISK_IMG)
 	@mkdir -p /tmp/vibeos_mount/usr/src
 	@rsync -a --exclude='*.o' --exclude='*.elf' --exclude='build/' user/ /tmp/vibeos_mount/usr/src/user/
 	@rsync -a --exclude='*.o' --exclude='build/' tinycc/ /tmp/vibeos_mount/usr/src/tinycc/
+	@mkdir -p /tmp/vibeos_mount/games
 	@mkdir -p /tmp/vibeos_mount/lib/tcc/include
 	@mkdir -p /tmp/vibeos_mount/lib/tcc/lib
 	@cp -r tinycc/include/* /tmp/vibeos_mount/lib/tcc/include/
@@ -267,47 +275,67 @@ install: pi user
 		exit 1; \
 	fi
 	@echo "Installing to $(DISK)..."
-	@# Mount the disk
+	@# Download Pi firmware if not cached
+	@mkdir -p $(BUILD_DIR)/firmware
+	@if [ ! -f $(BUILD_DIR)/firmware/bootcode.bin ]; then \
+		echo "  Downloading Pi boot firmware..."; \
+		curl -sL -o $(BUILD_DIR)/firmware/bootcode.bin https://github.com/raspberrypi/firmware/raw/master/boot/bootcode.bin; \
+		curl -sL -o $(BUILD_DIR)/firmware/start.elf https://github.com/raspberrypi/firmware/raw/master/boot/start.elf; \
+		curl -sL -o $(BUILD_DIR)/firmware/fixup.dat https://github.com/raspberrypi/firmware/raw/master/boot/fixup.dat; \
+	fi
 	@if [ "$$(uname)" = "Darwin" ]; then \
-		diskutil unmountDisk $(DISK) 2>/dev/null || true; \
-		PART=$$(echo $(DISK) | sed 's|/dev/||')s1; \
-		mkdir -p /tmp/vibeos_sd; \
-		mount -t msdos /dev/$$PART /tmp/vibeos_sd || (echo "Failed to mount. Try: sudo make install DISK=$(DISK)"; exit 1); \
+		echo "  Partitioning disk (MBR + FAT32)..."; \
+		diskutil partitionDisk $(DISK) MBR FAT32 VIBEOS 0b; \
+		PART=$(DISK)s1; \
+		MOUNT=$$(diskutil info $$PART | grep 'Mount Point' | sed 's/.*: *//'); \
+		if [ -z "$$MOUNT" ]; then \
+			echo "Failed to mount $$PART"; \
+			exit 1; \
+		fi; \
+		echo "  Mounted at $$MOUNT"; \
 	else \
-		sudo umount $(DISK)1 2>/dev/null || true; \
+		sudo parted $(DISK) --script mklabel msdos mkpart primary fat32 1MiB 100%; \
+		sudo mkfs.vfat -F 32 -n VIBEOS $(DISK)1; \
 		mkdir -p /tmp/vibeos_sd; \
 		sudo mount $(DISK)1 /tmp/vibeos_sd; \
-	fi
-	@echo "  Copying kernel..."
-	@cp $(BUILD_DIR)/kernel8.img /tmp/vibeos_sd/
-	@echo "  Copying userspace..."
-	@rsync -a $(SYSROOT)/ /tmp/vibeos_sd/
-	@mkdir -p /tmp/vibeos_sd/usr/src
-	@rsync -a --exclude='*.o' --exclude='*.elf' --exclude='build/' user/ /tmp/vibeos_sd/usr/src/user/
-	@rsync -a --exclude='*.o' --exclude='build/' tinycc/ /tmp/vibeos_sd/usr/src/tinycc/
-	@mkdir -p /tmp/vibeos_sd/lib/tcc/include
-	@mkdir -p /tmp/vibeos_sd/lib/tcc/lib
-	@cp -r tinycc/include/* /tmp/vibeos_sd/lib/tcc/include/
-	@cp tinycc/vibeos/tcc_include/* /tmp/vibeos_sd/lib/tcc/include/ 2>/dev/null || true
-	@cp user/lib/vibe.h /tmp/vibeos_sd/lib/tcc/include/
-	@cp user/lib/gfx.h /tmp/vibeos_sd/lib/tcc/include/ 2>/dev/null || true
-	@cp $(BUILD_DIR)/user/crt0.o /tmp/vibeos_sd/lib/tcc/lib/crt1.o
-	@cp $(BUILD_DIR)/user/crt0.o /tmp/vibeos_sd/lib/tcc/lib/Scrt1.o
-	@cp $(BUILD_DIR)/user/crti.o /tmp/vibeos_sd/lib/tcc/lib/
-	@cp $(BUILD_DIR)/user/crtn.o /tmp/vibeos_sd/lib/tcc/lib/
-	@cp tinycc/vibeos/libtcc1.a /tmp/vibeos_sd/lib/tcc/lib/
-	@cp tinycc/vibeos/libc.a /tmp/vibeos_sd/lib/tcc/lib/
-	@cp tinycc/vibeos/libc.a /tmp/vibeos_sd/lib/tcc/lib/libc.so
-	@cp user/linker.ld /tmp/vibeos_sd/lib/tcc/lib/
-	@if [ "$$(uname)" = "Darwin" ]; then \
-		dot_clean /tmp/vibeos_sd 2>/dev/null || true; \
-		find /tmp/vibeos_sd -name '._*' -delete 2>/dev/null || true; \
-		find /tmp/vibeos_sd -name '.DS_Store' -delete 2>/dev/null || true; \
-		diskutil unmount /tmp/vibeos_sd; \
+		MOUNT=/tmp/vibeos_sd; \
+	fi; \
+	echo "  Copying boot firmware..."; \
+	cp $(BUILD_DIR)/firmware/bootcode.bin $$MOUNT/; \
+	cp $(BUILD_DIR)/firmware/start.elf $$MOUNT/; \
+	cp $(BUILD_DIR)/firmware/fixup.dat $$MOUNT/; \
+	echo "arm_64bit=1" > $$MOUNT/config.txt; \
+	echo "kernel=kernel8.img" >> $$MOUNT/config.txt; \
+	echo "  Copying kernel..."; \
+	cp $(BUILD_DIR)/kernel8.img $$MOUNT/; \
+	echo "  Copying userspace..."; \
+	rsync -a $(SYSROOT)/ $$MOUNT/; \
+	mkdir -p $$MOUNT/usr/src; \
+	rsync -a --exclude='*.o' --exclude='*.elf' --exclude='build/' user/ $$MOUNT/usr/src/user/; \
+	rsync -a --exclude='*.o' --exclude='build/' tinycc/ $$MOUNT/usr/src/tinycc/; \
+	mkdir -p $$MOUNT/lib/tcc/include; \
+	mkdir -p $$MOUNT/lib/tcc/lib; \
+	cp -r tinycc/include/* $$MOUNT/lib/tcc/include/; \
+	cp tinycc/vibeos/tcc_include/* $$MOUNT/lib/tcc/include/ 2>/dev/null || true; \
+	cp user/lib/vibe.h $$MOUNT/lib/tcc/include/; \
+	cp user/lib/gfx.h $$MOUNT/lib/tcc/include/ 2>/dev/null || true; \
+	cp $(BUILD_DIR)/user/crt0.o $$MOUNT/lib/tcc/lib/crt1.o; \
+	cp $(BUILD_DIR)/user/crt0.o $$MOUNT/lib/tcc/lib/Scrt1.o; \
+	cp $(BUILD_DIR)/user/crti.o $$MOUNT/lib/tcc/lib/; \
+	cp $(BUILD_DIR)/user/crtn.o $$MOUNT/lib/tcc/lib/; \
+	cp tinycc/vibeos/libtcc1.a $$MOUNT/lib/tcc/lib/; \
+	cp tinycc/vibeos/libc.a $$MOUNT/lib/tcc/lib/; \
+	cp tinycc/vibeos/libc.a $$MOUNT/lib/tcc/lib/libc.so; \
+	cp user/linker.ld $$MOUNT/lib/tcc/lib/; \
+	if [ "$$(uname)" = "Darwin" ]; then \
+		dot_clean $$MOUNT 2>/dev/null || true; \
+		find $$MOUNT -name '._*' -delete 2>/dev/null || true; \
+		find $$MOUNT -name '.DS_Store' -delete 2>/dev/null || true; \
+		diskutil unmount $$MOUNT; \
 	else \
-		sudo umount /tmp/vibeos_sd; \
-	fi
-	@echo "Done! SD card ready."
+		sudo umount $$MOUNT; \
+	fi; \
+	echo "Done! SD card ready."
 
 # ============ Utility targets ============
 

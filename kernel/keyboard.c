@@ -172,6 +172,8 @@ static const char scancode_to_ascii_shift[128] = {
 #define SPECIAL_KEY_DELETE 0x106
 #define SPECIAL_KEY_PGUP   0x107
 #define SPECIAL_KEY_PGDN   0x108
+#define SPECIAL_KEY_CTRL   0x109
+#define SPECIAL_KEY_SHIFT  0x10A
 
 // Modifier state
 static int shift_held = 0;
@@ -449,12 +451,28 @@ static void process_events(void) {
         if (ev->type == EV_KEY) {
             uint16_t code = ev->code;
 
-            // Track modifier key state
+            // Track modifier key state and send as special keys
             if (code == KEY_LEFTSHIFT || code == KEY_RIGHTSHIFT) {
                 shift_held = (ev->value != KEY_RELEASED);
+                // Send shift key event
+                if (ev->value == KEY_PRESSED) {
+                    int next = (key_buf_write + 1) % KEY_BUF_SIZE;
+                    if (next != key_buf_read) {
+                        key_buffer[key_buf_write] = SPECIAL_KEY_SHIFT;
+                        key_buf_write = next;
+                    }
+                }
             }
             else if (code == KEY_LEFTCTRL || code == KEY_RIGHTCTRL) {
                 ctrl_held = (ev->value != KEY_RELEASED);
+                // Send ctrl key event
+                if (ev->value == KEY_PRESSED) {
+                    int next = (key_buf_write + 1) % KEY_BUF_SIZE;
+                    if (next != key_buf_read) {
+                        key_buffer[key_buf_write] = SPECIAL_KEY_CTRL;
+                        key_buf_write = next;
+                    }
+                }
             }
             // Key press
             else if (ev->value == KEY_PRESSED) {

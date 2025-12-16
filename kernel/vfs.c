@@ -850,7 +850,7 @@ int vfs_delete_recursive(const char *path) {
 
 int vfs_rename(const char *path, const char *newname) {
     if (use_fat32) {
-        // Build full path
+        // Build full path for old file
         char fullpath[VFS_MAX_PATH];
         if (path[0] == '/') {
             strncpy(fullpath, path, VFS_MAX_PATH - 1);
@@ -863,7 +863,13 @@ int vfs_rename(const char *path, const char *newname) {
             }
         }
 
-        return fat32_rename(fullpath, newname);
+        // Extract just the filename from newname (fat32_rename expects basename only)
+        const char *basename = newname;
+        for (const char *p = newname; *p; p++) {
+            if (*p == '/') basename = p + 1;
+        }
+
+        return fat32_rename(fullpath, basename);
     }
 
     // In-memory rename

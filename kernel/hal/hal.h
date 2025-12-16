@@ -72,6 +72,7 @@ void hal_keyboard_irq_handler(void);
 
 int hal_mouse_init(void);
 void hal_mouse_get_state(int *x, int *y, int *buttons);
+void hal_mouse_set_pos(int x, int y);
 uint32_t hal_mouse_get_irq(void);
 void hal_mouse_irq_handler(void);
 

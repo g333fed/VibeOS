@@ -85,6 +85,8 @@ typedef struct kapi {
     void (*mouse_get_pos)(int *x, int *y);
     uint8_t (*mouse_get_buttons)(void);
     void (*mouse_poll)(void);
+    void (*mouse_set_pos)(int x, int y);
+    void (*mouse_get_delta)(int *dx, int *dy);
 
     // Window management (for desktop apps)
     // These are set by the desktop window server, not the kernel

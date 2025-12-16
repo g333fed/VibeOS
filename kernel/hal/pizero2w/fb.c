@@ -206,11 +206,13 @@ int hal_fb_init(uint32_t width, uint32_t height) {
     mailbox_buffer[idx++] = 0;
     mailbox_buffer[idx++] = 32;             // 32 bits per pixel
 
-    // Set pixel order (0 = BGR, 1 = RGB) - we want RGB
+    // Set pixel order (0 = BGR, 1 = RGB)
+    // Pi GPU often ignores RGB request and uses BGR internally,
+    // so request BGR to match hardware behavior
     mailbox_buffer[idx++] = TAG_SET_PIXEL_ORDER;
     mailbox_buffer[idx++] = 4;
     mailbox_buffer[idx++] = 0;
-    mailbox_buffer[idx++] = 1;              // RGB
+    mailbox_buffer[idx++] = 0;              // BGR (matches Pi hardware)
 
     // Allocate framebuffer
     mailbox_buffer[idx++] = TAG_ALLOCATE_FB;

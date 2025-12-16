@@ -260,6 +260,8 @@ void kapi_init(void) {
     kapi.mouse_get_pos = mouse_get_screen_pos;
     kapi.mouse_get_buttons = mouse_get_buttons;
     kapi.mouse_poll = mouse_poll;
+    kapi.mouse_set_pos = mouse_set_pos;
+    kapi.mouse_get_delta = mouse_get_delta;
 
     // Window management (provided by desktop, not kernel)
     kapi.window_create = 0;

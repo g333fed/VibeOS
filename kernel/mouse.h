@@ -29,6 +29,12 @@ uint8_t mouse_get_buttons(void);
 // Check if mouse has new events
 int mouse_has_event(void);
 
+// Set mouse position (for mouse capture/warp)
+void mouse_set_pos(int x, int y);
+
+// Get mouse delta (returns accumulated movement and clears it)
+void mouse_get_delta(int *dx, int *dy);
+
 // Poll for mouse events (call regularly)
 void mouse_poll(void);
 

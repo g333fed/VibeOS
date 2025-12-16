@@ -119,6 +119,10 @@ static virtio_input_event_t event_bufs[QUEUE_SIZE] __attribute__((aligned(16)));
 // Current mouse state
 static int mouse_x = 0;        // Raw value (0-32767)
 static int mouse_y = 0;
+static int mouse_last_x = 0;   // For delta calculation
+static int mouse_last_y = 0;
+static int mouse_dx = 0;       // Accumulated delta
+static int mouse_dy = 0;
 static uint8_t mouse_buttons = 0;
 static int mouse_event_pending = 0;
 
@@ -286,10 +290,14 @@ void mouse_poll(void) {
         // Process event
         if (ev->type == EV_ABS) {
             if (ev->code == ABS_X) {
-                mouse_x = ev->value;
+                int new_x = ev->value;
+                mouse_dx += new_x - mouse_x;
+                mouse_x = new_x;
                 mouse_event_pending = 1;
             } else if (ev->code == ABS_Y) {
-                mouse_y = ev->value;
+                int new_y = ev->value;
+                mouse_dy += new_y - mouse_y;
+                mouse_y = new_y;
                 mouse_event_pending = 1;
             }
         } else if (ev->type == EV_KEY) {
@@ -364,6 +372,61 @@ int mouse_has_event(void) {
     int pending = mouse_event_pending;
     mouse_event_pending = 0;
     return pending;
+}
+
+void mouse_set_pos(int x, int y) {
+    // Convert screen coordinates to raw 0-32767 range
+    extern uint32_t fb_width, fb_height;
+    mouse_x = (x * 32768) / (int)fb_width;
+    mouse_y = (y * 32768) / (int)fb_height;
+
+    // Clamp to valid range
+    if (mouse_x < 0) mouse_x = 0;
+    if (mouse_x > 32767) mouse_x = 32767;
+    if (mouse_y < 0) mouse_y = 0;
+    if (mouse_y > 32767) mouse_y = 32767;
+}
+
+void mouse_get_delta(int *dx, int *dy) {
+    // For HAL/Pi path - track position ourselves
+    static int hal_last_x = -1;
+    static int hal_last_y = -1;
+
+    // Fall back to HAL on Pi (no virtio)
+    if (!mouse_base) {
+        int hx, hy;
+        hal_mouse_get_state(&hx, &hy, NULL);
+
+        if (hal_last_x < 0) {
+            // First call - initialize to center
+            hal_last_x = 400;
+            hal_last_y = 300;
+            hal_mouse_set_pos(400, 300);
+            if (dx) *dx = 0;
+            if (dy) *dy = 0;
+            return;
+        }
+
+        if (dx) *dx = hx - hal_last_x;
+        if (dy) *dy = hy - hal_last_y;
+
+        // Warp back to center for infinite movement
+        hal_mouse_set_pos(400, 300);
+        hal_last_x = 400;
+        hal_last_y = 300;
+        return;
+    }
+
+    // Virtio path - poll first to get latest
+    mouse_poll();
+
+    // Return accumulated deltas (raw, not scaled - let caller handle sensitivity)
+    if (dx) *dx = mouse_dx;
+    if (dy) *dy = mouse_dy;
+
+    // Clear accumulated deltas
+    mouse_dx = 0;
+    mouse_dy = 0;
 }
 
 // Get the mouse's IRQ number

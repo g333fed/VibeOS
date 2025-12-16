@@ -94,3 +94,16 @@ void hal_mouse_irq_handler(void) {
     // USB mouse is polled via hal_usb_keyboard_tick which handles both
     poll_usb_mouse();
 }
+
+void hal_mouse_set_pos(int x, int y) {
+    mouse_x = x;
+    mouse_y = y;
+
+    // Clamp to screen bounds
+    int max_x = (int)fb_width - 1;
+    int max_y = (int)fb_height - 1;
+    if (mouse_x < 0) mouse_x = 0;
+    if (mouse_x > max_x) mouse_x = max_x;
+    if (mouse_y < 0) mouse_y = 0;
+    if (mouse_y > max_y) mouse_y = max_y;
+}

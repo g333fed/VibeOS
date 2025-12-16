@@ -130,6 +130,12 @@ void hal_mouse_get_state(int *x, int *y, int *buttons) {
     if (buttons) *buttons = 0;
 }
 
+void hal_mouse_set_pos(int x, int y) {
+    // Not used on QEMU - virtio handles it
+    (void)x;
+    (void)y;
+}
+
 uint32_t hal_mouse_get_irq(void) {
     return 0;
 }

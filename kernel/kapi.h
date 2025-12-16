@@ -85,6 +85,8 @@ typedef struct {
     void (*mouse_get_pos)(int *x, int *y);         // Get screen position
     uint8_t (*mouse_get_buttons)(void);            // Get button state
     void (*mouse_poll)(void);                      // Poll for updates
+    void (*mouse_set_pos)(int x, int y);           // Set position (for capture)
+    void (*mouse_get_delta)(int *dx, int *dy);     // Get and clear accumulated delta
 
     // Window management (for desktop apps)
     // These are set by the desktop window server, not the kernel
