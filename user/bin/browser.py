@@ -909,7 +909,7 @@ def main():
     import sys
 
     # Default URL
-    url = 'file:///testsite/index.html'
+    url = 'http://example.com'
 
     # Check if a URL argument was passed (must have a scheme)
     for arg in sys.argv[1:]:

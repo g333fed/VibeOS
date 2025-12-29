@@ -1,6 +1,12 @@
 /*
  * DOOM for VibeOS - libc declarations
  * Adapted from TCC libc for doomgeneric port
+ *
+ * Copyright (C) 2024-2025 Kaan Senol
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; version 2.
  */
 
 #ifndef DOOM_LIBC_H

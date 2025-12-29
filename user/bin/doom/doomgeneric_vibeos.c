@@ -1,6 +1,12 @@
 /*
  * doomgeneric for VibeOS
  * Platform-specific implementation for doomgeneric port
+ *
+ * Copyright (C) 2024-2025 Kaan Senol
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; version 2.
  */
 
 #include "doom_libc.h"
