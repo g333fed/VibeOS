@@ -193,6 +193,7 @@ def fetch_file(path):
 
     size = vibe.file_size(f)
     data = vibe.read(f, size, 0)
+
     if data is None:
         return (500, "Failed to read file")
 
@@ -394,20 +395,6 @@ def measure_text(text, font_size):
             width += vibe.ttf_get_kerning(prev_cp, cp, font_size)
         prev_cp = cp
     return width
-
-def layout_document(root):
-    """Layout the entire document, returns (blocks, links, total_height)"""
-    blocks = []
-    links = []
-    y = MARGIN
-
-    body = find_element(root, 'body')
-    if not body:
-        body = root
-
-    y = layout_element(body, blocks, links, y, 0, 16, 0, None)
-
-    return blocks, links, y + MARGIN
 
 def find_element(root, tag):
     """Find first element with given tag"""
@@ -687,14 +674,14 @@ def layout_table(table_elem, blocks, links, y, indent, font_size, style):
 # Renderer
 # ============================================================================
 
-def render(wid, blocks, scroll_y):
+def render(wid, blocks, scroll_y, content_y, content_h, win_w, win_h):
     """Render all visible blocks"""
-    vibe.window_fill_rect(wid, 0, CONTENT_Y, WIN_W, CONTENT_H, WHITE)
+    vibe.window_fill_rect(wid, 0, content_y, win_w, content_h, WHITE)
 
     for block in blocks:
-        by = block.y - scroll_y + CONTENT_Y
+        by = block.y - scroll_y + content_y
 
-        if by + block.h < CONTENT_Y or by > WIN_H:
+        if by + block.h < content_y or by > win_h:
             continue
 
         if block.text == '__HR__':
@@ -736,10 +723,11 @@ def render_text(wid, x, y, text, font_size, style, fg):
 # ============================================================================
 
 class Browser:
-    def __init__(self):
+    def __init__(self, kiosk_mode=False):
         self.wid = -1
         self.url = ''
         self.history = []
+        self.forward_history = []
         self.blocks = []
         self.links = []
         self.scroll_y = 0
@@ -748,13 +736,74 @@ class Browser:
         self.address_text = ''
         self.editing_url = False
         self.cursor_pos = 0
+        self.kiosk_mode = kiosk_mode
+        # Window dimensions (updated on resize)
+        self.win_w = WIN_W
+        self.win_h = WIN_H
+        # Adjust content area based on mode
+        # Kiosk mode has small nav buttons at top (20px)
+        self.content_y = 20 if kiosk_mode else ADDRESS_BAR_H + 2
+        self.content_h = self.win_h - 20 if kiosk_mode else self.win_h - self.content_y
+        self.content_w = self.win_w - MARGIN * 2 - SCROLLBAR_W
+        # Scrollbar dragging state
+        self.scrollbar_dragging = False
+        self.scrollbar_drag_start_y = 0
+        self.scrollbar_drag_start_scroll = 0
+        # Current HTML for relayout on resize
+        self.current_html = ''
 
-    def navigate(self, url):
+    def layout_document(self, root):
+        """Layout the entire document using current window dimensions"""
+        global CONTENT_W
+        CONTENT_W = self.content_w
+        blocks = []
+        links = []
+        y = MARGIN
+
+        body = find_element(root, 'body')
+        if not body:
+            body = root
+
+        y = layout_element(body, blocks, links, y, 0, 16, 0, None)
+
+        # Calculate actual content height from blocks
+        max_bottom = y
+        for block in blocks:
+            block_bottom = block.y + block.h
+            if block_bottom > max_bottom:
+                max_bottom = block_bottom
+
+        content_height = max_bottom + MARGIN
+
+        return blocks, links, content_height * 2
+
+    def handle_resize(self, new_w, new_h):
+        """Handle window resize"""
+        self.win_w = new_w
+        self.win_h = new_h
+        self.content_h = self.win_h - 20 if self.kiosk_mode else self.win_h - self.content_y
+        self.content_w = self.win_w - MARGIN * 2 - SCROLLBAR_W
+
+        # Re-layout if we have content
+        if self.current_html:
+            root = parse_html(self.current_html)
+            self.blocks, self.links, self.content_height = self.layout_document(root)
+            self.max_scroll = max(0, self.content_height - self.content_h)
+            # Clamp scroll position
+            if self.scroll_y > self.max_scroll:
+                self.scroll_y = self.max_scroll
+            self.draw()
+
+    def navigate(self, url, from_back=False, from_forward=False):
         """Navigate to URL"""
         url = resolve_url(self.url, url)
 
         if self.url:
-            self.history.append(self.url)
+            if from_forward:
+                self.forward_history.append(self.url)
+            elif not from_back:
+                self.history.append(self.url)
+                self.forward_history = []  # Clear forward on new navigation
         self.url = url
         self.address_text = url
         self.scroll_y = 0
@@ -775,10 +824,11 @@ class Browser:
         if status != 200:
             body = "<html><body><h1>Error " + str(status) + "</h1><p>" + body + "</p></body></html>"
 
+        self.current_html = body
         root = parse_html(body)
-        self.blocks, self.links, self.content_height = layout_document(root)
+        self.blocks, self.links, self.content_height = self.layout_document(root)
 
-        self.max_scroll = max(0, self.content_height - CONTENT_H)
+        self.max_scroll = max(0, self.content_height - self.content_h)
 
         title_elem = find_element(root, 'title')
         title = get_all_text(title_elem) if title_elem else url
@@ -789,9 +839,18 @@ class Browser:
     def back(self):
         """Go back in history"""
         if len(self.history) > 0:
+            self.forward_history.append(self.url)
             url = self.history.pop()
             self.url = ''
-            self.navigate(url)
+            self.navigate(url, from_back=True)
+
+    def forward(self):
+        """Go forward in history"""
+        if len(self.forward_history) > 0:
+            self.history.append(self.url)
+            url = self.forward_history.pop()
+            self.url = ''
+            self.navigate(url, from_forward=True)
 
     def refresh(self):
         """Reload current page"""
@@ -803,36 +862,56 @@ class Browser:
     def draw(self):
         """Draw the browser UI"""
         self.draw_address_bar()
-        render(self.wid, self.blocks, self.scroll_y)
+        render(self.wid, self.blocks, self.scroll_y, self.content_y, self.content_h, self.win_w, self.win_h)
         self.draw_scrollbar()
         vibe.window_invalidate(self.wid)
 
     def draw_address_bar(self):
-        """Draw address bar"""
-        vibe.window_fill_rect(self.wid, 0, 0, WIN_W, ADDRESS_BAR_H, LIGHT_GRAY)
+        """Draw address bar or nav buttons"""
+        if self.kiosk_mode:
+            # Draw minimal nav bar with just back/forward buttons
+            vibe.window_fill_rect(self.wid, 0, 0, self.win_w, 20, LIGHT_GRAY)
+            # Back button
+            vibe.window_fill_rect(self.wid, 4, 2, 16, 16, WHITE)
+            vibe.window_draw_rect(self.wid, 4, 2, 16, 16, BLACK)
+            vibe.window_draw_string(self.wid, 6, 2, "<", BLACK, WHITE)
+            # Forward button
+            vibe.window_fill_rect(self.wid, 24, 2, 16, 16, WHITE)
+            vibe.window_draw_rect(self.wid, 24, 2, 16, 16, BLACK)
+            vibe.window_draw_string(self.wid, 26, 2, ">", BLACK, WHITE)
+            return
+
+        vibe.window_fill_rect(self.wid, 0, 0, self.win_w, ADDRESS_BAR_H, LIGHT_GRAY)
 
         # Back button
         vibe.window_fill_rect(self.wid, 4, 4, 16, 16, WHITE)
         vibe.window_draw_rect(self.wid, 4, 4, 16, 16, BLACK)
         vibe.window_draw_string(self.wid, 6, 4, "<", BLACK, WHITE)
 
-        # Refresh button
+        # Forward button
         vibe.window_fill_rect(self.wid, 24, 4, 16, 16, WHITE)
         vibe.window_draw_rect(self.wid, 24, 4, 16, 16, BLACK)
-        vibe.window_draw_string(self.wid, 26, 4, "O", BLACK, WHITE)
+        vibe.window_draw_string(self.wid, 26, 4, ">", BLACK, WHITE)
 
-        # Address bar (shifted right for refresh button)
-        vibe.window_fill_rect(self.wid, 44, 4, WIN_W - 48, 16, WHITE)
-        vibe.window_draw_rect(self.wid, 44, 4, WIN_W - 48, 16, BLACK)
+        # Refresh button
+        vibe.window_fill_rect(self.wid, 44, 4, 16, 16, WHITE)
+        vibe.window_draw_rect(self.wid, 44, 4, 16, 16, BLACK)
+        vibe.window_draw_string(self.wid, 46, 4, "O", BLACK, WHITE)
 
+        # Address bar (shifted right for buttons)
+        vibe.window_fill_rect(self.wid, 64, 4, self.win_w - 68, 16, WHITE)
+        vibe.window_draw_rect(self.wid, 64, 4, self.win_w - 68, 16, BLACK)
+
+        # Calculate max displayable chars based on window width
+        max_chars = (self.win_w - 76) // 8
         display_url = self.address_text
-        if len(display_url) > 68:
-            display_url = display_url[:68] + '...'
-        vibe.window_draw_string(self.wid, 48, 4, display_url, BLACK, WHITE)
+        if len(display_url) > max_chars:
+            display_url = display_url[:max_chars] + '...'
+        vibe.window_draw_string(self.wid, 68, 4, display_url, BLACK, WHITE)
 
         # Draw cursor if editing
         if self.editing_url:
-            cursor_x = 48 + self.cursor_pos * 8
+            cursor_x = 68 + self.cursor_pos * 8
             vibe.window_fill_rect(self.wid, cursor_x, 6, 1, 12, BLACK)
 
     def draw_scrollbar(self):
@@ -840,41 +919,84 @@ class Browser:
         if self.max_scroll <= 0:
             return
 
-        bar_x = WIN_W - SCROLLBAR_W
-        bar_h = CONTENT_H
+        bar_x = self.win_w - SCROLLBAR_W
+        bar_h = self.content_h
 
-        thumb_h = max(20, bar_h * CONTENT_H // self.content_height)
-        thumb_y = CONTENT_Y + (bar_h - thumb_h) * self.scroll_y // self.max_scroll
+        thumb_h = max(20, bar_h * self.content_h // self.content_height)
+        thumb_y = self.content_y + (bar_h - thumb_h) * self.scroll_y // self.max_scroll
 
-        vibe.window_fill_rect(self.wid, bar_x, CONTENT_Y, SCROLLBAR_W, bar_h, LIGHT_GRAY)
+        vibe.window_fill_rect(self.wid, bar_x, self.content_y, SCROLLBAR_W, bar_h, LIGHT_GRAY)
         vibe.window_fill_rect(self.wid, bar_x + 2, thumb_y, SCROLLBAR_W - 4, thumb_h, GRAY)
 
     def handle_click(self, x, y):
         """Handle mouse click"""
-        # Check toolbar buttons
-        if y < ADDRESS_BAR_H:
+        # Check kiosk mode nav buttons
+        if self.kiosk_mode and y < 20:
+            # Back button
+            if x >= 4 and x < 20 and y >= 2 and y < 18:
+                self.back()
+                return
+            # Forward button
+            if x >= 24 and x < 40 and y >= 2 and y < 18:
+                self.forward()
+                return
+            return
+
+        # Check toolbar buttons (normal mode)
+        if not self.kiosk_mode and y < ADDRESS_BAR_H:
             # Back button
             if x >= 4 and x < 20 and y >= 4 and y < 20:
                 self.back()
                 return
-            # Refresh button
+            # Forward button
             if x >= 24 and x < 40 and y >= 4 and y < 20:
+                self.forward()
+                return
+            # Refresh button
+            if x >= 44 and x < 60 and y >= 4 and y < 20:
                 self.refresh()
                 return
             # Click on address bar
-            if x >= 44:
+            if x >= 64:
                 self.editing_url = True
                 self.cursor_pos = len(self.address_text)
                 self.draw_address_bar()
                 vibe.window_invalidate(self.wid)
                 return
 
+        # Check scrollbar click
+        if x >= self.win_w - SCROLLBAR_W and y >= self.content_y:
+            self.scrollbar_dragging = True
+            self.scrollbar_drag_start_y = y
+            self.scrollbar_drag_start_scroll = self.scroll_y
+            return
+
         # Check links
-        content_y = y - CONTENT_Y + self.scroll_y
+        content_y = y - self.content_y + self.scroll_y
         for lx, ly, lw, lh, href in self.links:
             if lx <= x < lx + lw and ly <= content_y < ly + lh:
                 self.navigate(href)
                 return
+
+    def handle_mouse_up(self, x, y):
+        """Handle mouse release"""
+        self.scrollbar_dragging = False
+
+    def handle_mouse_move(self, x, y):
+        """Handle mouse movement"""
+        if self.scrollbar_dragging and self.max_scroll > 0:
+            dy = y - self.scrollbar_drag_start_y
+            # Calculate how much to scroll based on drag distance
+            bar_h = self.content_h
+            thumb_h = max(20, bar_h * self.content_h // self.content_height)
+            track_range = bar_h - thumb_h
+            if track_range > 0:
+                scroll_delta = (dy * self.max_scroll) // track_range
+                new_scroll = self.scrollbar_drag_start_scroll + scroll_delta
+                new_scroll = max(0, min(self.max_scroll, new_scroll))
+                if new_scroll != self.scroll_y:
+                    self.scroll_y = new_scroll
+                    self.draw()
 
     def handle_key(self, key):
         """Handle keyboard input"""
@@ -909,10 +1031,10 @@ class Browser:
                 self.scroll_y = min(self.max_scroll, self.scroll_y + 20)
                 self.draw()
             elif key == 0x109:  # PGUP
-                self.scroll_y = max(0, self.scroll_y - CONTENT_H)
+                self.scroll_y = max(0, self.scroll_y - self.content_h)
                 self.draw()
             elif key == 0x10A:  # PGDN
-                self.scroll_y = min(self.max_scroll, self.scroll_y + CONTENT_H)
+                self.scroll_y = min(self.max_scroll, self.scroll_y + self.content_h)
                 self.draw()
         return True
 
@@ -936,9 +1058,15 @@ class Browser:
                     running = False
                 elif etype == vibe.WIN_EVENT_MOUSE_DOWN:
                     self.handle_click(d1, d2)
+                elif etype == vibe.WIN_EVENT_MOUSE_UP:
+                    self.handle_mouse_up(d1, d2)
+                elif etype == vibe.WIN_EVENT_MOUSE_MOVE:
+                    self.handle_mouse_move(d1, d2)
                 elif etype == vibe.WIN_EVENT_KEY:
                     if not self.handle_key(d1):
                         running = False
+                elif etype == vibe.WIN_EVENT_RESIZE:
+                    self.handle_resize(d1, d2)
 
             vibe.sched_yield()
 
@@ -954,14 +1082,16 @@ def main():
 
     # Default URL - welcome page
     url = 'about:home'
+    kiosk_mode = False
 
-    # Check if a URL argument was passed (must have a scheme)
+    # Check arguments
     for arg in sys.argv[1:]:
-        if arg.startswith('http://') or arg.startswith('https://') or arg.startswith('file://') or arg.startswith('about:'):
+        if arg == '--kiosk':
+            kiosk_mode = True
+        elif arg.startswith('http://') or arg.startswith('https://') or arg.startswith('file://') or arg.startswith('about:'):
             url = arg
-            break
 
-    browser = Browser()
+    browser = Browser(kiosk_mode=kiosk_mode)
     return browser.run(url)
 
 main()
