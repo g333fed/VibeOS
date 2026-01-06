@@ -52,13 +52,17 @@ VibeOS is an operating system written from scratch for ARM64 (aarch64). It runs 
 
 ## Screenshots
 
-| Desktop | Browser | DOOM |
-|---------|---------|------|
-| ![Desktop](screenshots/desktop.png) | ![Browser](screenshots/browser.png) | ![DOOM](screenshots/doom.png) |
+![Desktop](screenshots/desktop.png)
 
-| Terminal | VibeCode | Real Hardware |
-|----------|----------|---------------|
-| ![Terminal](screenshots/terminal.png) | ![VibeCode](screenshots/vibecode.gif) | ![Pi Boot](screenshots/pi-boot.gif) |
+![Browser](screenshots/browser.png)
+
+![DOOM](screenshots/doom.png)
+
+![Terminal](screenshots/terminal.png)
+
+![VibeCode](screenshots/vibecode.gif)
+
+![Pi Boot](screenshots/pi-boot.gif)
 
 ## Quick Start
 
