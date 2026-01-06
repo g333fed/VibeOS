@@ -30,6 +30,8 @@
 #define SCROLLBAR_MIN_THUMB 20  // Minimum thumb height in pixels
 
 // Window dimensions
+// Desktop window chrome: 28px title bar + 1px separator + 10px corner radius = 39px
+#define WIN_CHROME_HEIGHT 39
 #define WIN_WIDTH  (TERM_COLS * CHAR_WIDTH + SCROLLBAR_WIDTH)
 #define WIN_HEIGHT (TERM_ROWS * CHAR_HEIGHT)
 
@@ -455,8 +457,8 @@ int main(kapi_t *kapi, int argc, char **argv) {
         return 1;
     }
 
-    // Create window
-    window_id = api->window_create(50, 50, WIN_WIDTH, WIN_HEIGHT, "Terminal");
+    // Create window (add chrome height for title bar, separator, and corner radius)
+    window_id = api->window_create(50, 50, WIN_WIDTH, WIN_HEIGHT + WIN_CHROME_HEIGHT, "Terminal");
     if (window_id < 0) {
         api->puts("term: failed to create window\n");
         return 1;

@@ -228,13 +228,20 @@ static void dump_log(void) {
     for (size_t i = 0; i < log_size; i++) {
         out_putc(log_buf[i]);
     }
+    // Ensure output ends with newline
+    if (log_size > 0 && log_buf[log_size - 1] != '\n') {
+        out_putc('\n');
+    }
 }
 
 int main(kapi_t *k, int argc, char **argv) {
     api = k;
 
     // Check for -n flag (non-interactive dump)
-    int interactive = 1;
+    // Also auto-detect terminal: if stdio hooks are set, we're in a terminal
+    // and interactive mode won't work (it uses console functions directly)
+    int in_terminal = (k->stdio_putc != 0);
+    int interactive = !in_terminal;  // Default to interactive unless in terminal
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-n") == 0) {
             interactive = 0;

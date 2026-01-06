@@ -45,6 +45,29 @@ HTML_ENTITIES = {
 }
 
 # ============================================================================
+# Welcome Page
+# ============================================================================
+
+WELCOME_PAGE = '''<!DOCTYPE html>
+<html>
+<head><title>Welcome to VibeOS</title></head>
+<body>
+<h1>Welcome to VibeOS Browser</h1>
+<p>A simple web browser for a simple operating system.</p>
+<hr>
+<h2>Try these links:</h2>
+<ul>
+<li><a href="http://example.com">example.com</a> - A simple test page</li>
+<li><a href="http://info.cern.ch">info.cern.ch</a> - The first website ever</li>
+<li><a href="http://motherfuckingwebsite.com">motherfuckingwebsite.com</a> - One of the few pages that can be rendered by VibeOS browser</li>
+</ul>
+<hr>
+<p>Tip: Click the address bar to type a URL, press Enter to navigate.</p>
+<p>Use the back button or Page Up/Down to navigate.</p>
+</body>
+</html>'''
+
+# ============================================================================
 # URL Parser
 # ============================================================================
 
@@ -85,7 +108,7 @@ def parse_url(url):
 
 def resolve_url(base_url, rel_url):
     """Resolve relative URL against base URL"""
-    if rel_url.startswith('http://') or rel_url.startswith('https://') or rel_url.startswith('file://'):
+    if rel_url.startswith('http://') or rel_url.startswith('https://') or rel_url.startswith('file://') or rel_url.startswith('about:'):
         return rel_url
 
     scheme, host, port, path = parse_url(base_url)
@@ -110,6 +133,10 @@ def resolve_url(base_url, rel_url):
 
 def fetch_url(url):
     """Fetch content from URL, returns (status, body)"""
+    # Handle special about: URLs
+    if url == 'about:home' or url == 'about:blank':
+        return (200, WELCOME_PAGE)
+
     scheme, host, port, path = parse_url(url)
 
     if scheme == 'file':
@@ -766,6 +793,13 @@ class Browser:
             self.url = ''
             self.navigate(url)
 
+    def refresh(self):
+        """Reload current page"""
+        if self.url:
+            url = self.url
+            self.url = ''  # Clear so it doesn't add to history
+            self.navigate(url)
+
     def draw(self):
         """Draw the browser UI"""
         self.draw_address_bar()
@@ -782,18 +816,23 @@ class Browser:
         vibe.window_draw_rect(self.wid, 4, 4, 16, 16, BLACK)
         vibe.window_draw_string(self.wid, 6, 4, "<", BLACK, WHITE)
 
-        # Address bar
-        vibe.window_fill_rect(self.wid, 24, 4, WIN_W - 28, 16, WHITE)
-        vibe.window_draw_rect(self.wid, 24, 4, WIN_W - 28, 16, BLACK)
+        # Refresh button
+        vibe.window_fill_rect(self.wid, 24, 4, 16, 16, WHITE)
+        vibe.window_draw_rect(self.wid, 24, 4, 16, 16, BLACK)
+        vibe.window_draw_string(self.wid, 26, 4, "O", BLACK, WHITE)
+
+        # Address bar (shifted right for refresh button)
+        vibe.window_fill_rect(self.wid, 44, 4, WIN_W - 48, 16, WHITE)
+        vibe.window_draw_rect(self.wid, 44, 4, WIN_W - 48, 16, BLACK)
 
         display_url = self.address_text
-        if len(display_url) > 70:
-            display_url = display_url[:70] + '...'
-        vibe.window_draw_string(self.wid, 28, 4, display_url, BLACK, WHITE)
+        if len(display_url) > 68:
+            display_url = display_url[:68] + '...'
+        vibe.window_draw_string(self.wid, 48, 4, display_url, BLACK, WHITE)
 
         # Draw cursor if editing
         if self.editing_url:
-            cursor_x = 28 + self.cursor_pos * 8
+            cursor_x = 48 + self.cursor_pos * 8
             vibe.window_fill_rect(self.wid, cursor_x, 6, 1, 12, BLACK)
 
     def draw_scrollbar(self):
@@ -812,13 +851,18 @@ class Browser:
 
     def handle_click(self, x, y):
         """Handle mouse click"""
-        # Check back button
+        # Check toolbar buttons
         if y < ADDRESS_BAR_H:
+            # Back button
             if x >= 4 and x < 20 and y >= 4 and y < 20:
                 self.back()
                 return
+            # Refresh button
+            if x >= 24 and x < 40 and y >= 4 and y < 20:
+                self.refresh()
+                return
             # Click on address bar
-            if x >= 24:
+            if x >= 44:
                 self.editing_url = True
                 self.cursor_pos = len(self.address_text)
                 self.draw_address_bar()
@@ -908,12 +952,12 @@ class Browser:
 def main():
     import sys
 
-    # Default URL
-    url = 'http://example.com'
+    # Default URL - welcome page
+    url = 'about:home'
 
     # Check if a URL argument was passed (must have a scheme)
     for arg in sys.argv[1:]:
-        if arg.startswith('http://') or arg.startswith('https://') or arg.startswith('file://'):
+        if arg.startswith('http://') or arg.startswith('https://') or arg.startswith('file://') or arg.startswith('about:'):
             url = arg
             break
 

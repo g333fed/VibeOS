@@ -1168,8 +1168,8 @@ static void draw_about_dialog(void) {
     int y = ABOUT_Y;
     int r = 12;  // Corner radius
 
-    // Shadow
-    bb_box_shadow_rounded(x, y, ABOUT_W, ABOUT_H, r, 16, 4, 8, COLOR_BLACK);
+    // Shadow (subtle, like regular windows)
+    bb_box_shadow_rounded(x, y, ABOUT_W, ABOUT_H, r, 4, 2, 2, COLOR_SHADOW);
 
     // Background (translucent white)
     bb_fill_rounded_alpha(x, y, ABOUT_W, ABOUT_H, r, 0x00FAFAFA, 250);
@@ -1273,13 +1273,12 @@ static void draw_about_dialog(void) {
     int hovering = (mouse_x >= btn_x && mouse_x < btn_x + btn_w &&
                    mouse_y >= btn_y && mouse_y < btn_y + btn_h);
 
-    if (hovering) {
-        bb_fill_rounded(btn_x, btn_y, btn_w, btn_h, btn_r, COLOR_ACCENT_HOVER);
-    } else {
-        bb_fill_rounded(btn_x, btn_y, btn_w, btn_h, btn_r, COLOR_ACCENT);
-    }
+    // Gray button (not blue)
+    uint32_t btn_bg = hovering ? 0x00CCCCCC : 0x00E0E0E0;
+    bb_fill_rounded(btn_x, btn_y, btn_w, btn_h, btn_r, btn_bg);
+    bb_draw_rounded(btn_x, btn_y, btn_w, btn_h, btn_r, 0x00AAAAAA);  // Subtle border
     int ok_x = btn_x + (btn_w - 16) / 2;
-    bb_draw_string(ok_x, btn_y + 6, "OK", COLOR_WHITE, hovering ? COLOR_ACCENT_HOVER : COLOR_ACCENT);
+    bb_draw_string(ok_x, btn_y + 6, "OK", COLOR_MENU_TEXT, btn_bg);
 }
 
 // Execute a menu action

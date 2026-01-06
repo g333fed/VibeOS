@@ -41,7 +41,7 @@ static const char button_labels[4][4][3] = {
 #define COLOR_DISPLAY_FG 0x00222222
 #define COLOR_BTN_NUM    0x00FFFFFF
 #define COLOR_BTN_OP     0x00FF9500  // Orange for operators
-#define COLOR_BTN_EQ     0x00007AFF  // Blue for equals
+#define COLOR_BTN_EQ     0x00E0E0E0  // Gray for equals (like number buttons)
 #define COLOR_BTN_TEXT   0x00333333
 #define COLOR_BTN_OP_TXT 0x00FFFFFF
 #define COLOR_BTN_BORDER 0x00CCCCCC
@@ -144,8 +144,8 @@ static void draw_button(int row, int col, int pressed) {
     int is_eq = (c == '=');
 
     if (is_eq) {
-        bg = pressed ? 0x00005FCC : COLOR_BTN_EQ;
-        fg = COLOR_BTN_OP_TXT;
+        bg = pressed ? 0x00CCCCCC : COLOR_BTN_EQ;
+        fg = COLOR_BTN_TEXT;  // Dark text on gray button
     } else if (is_op) {
         bg = pressed ? 0x00CC7700 : COLOR_BTN_OP;
         fg = COLOR_BTN_OP_TXT;
@@ -291,8 +291,8 @@ int main(kapi_t *kapi, int argc, char **argv) {
     int content_w = BTN_PAD * 2 + 4 * BTN_W + 3 * BTN_PAD;
     int content_h = DISPLAY_H + BTN_PAD * 3 + 4 * BTN_H + 3 * BTN_PAD;
 
-    // Create window (add title bar height in desktop)
-    window_id = api->window_create(200, 100, content_w, content_h + 18, "Calculator");
+    // Create window (add title bar height - desktop uses 28px title bar)
+    window_id = api->window_create(200, 100, content_w, content_h + 28, "Calculator");
     if (window_id < 0) {
         api->puts("calc: failed to create window\n");
         return 1;
