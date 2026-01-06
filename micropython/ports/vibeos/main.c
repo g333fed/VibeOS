@@ -82,27 +82,6 @@ mp_lexer_t *mp_lexer_new_from_file(qstr filename) {
     size = j;
     buf[size] = '\0';
 
-    // Debug: show first 32 bytes as hex to detect BOM/weird chars
-    mp_vibeos_api->uart_puts("DEBUG: size=");
-    char hex[8];
-    const char *hexchars = "0123456789ABCDEF";
-    int show = size < 32 ? size : 32;
-    for (int x = 0; x < 4; x++) {
-        hex[x] = hexchars[(size >> (12 - x*4)) & 0xF];
-    }
-    hex[4] = '\0';
-    mp_vibeos_api->uart_puts(hex);
-    mp_vibeos_api->uart_puts(" hex=[");
-    for (int x = 0; x < show; x++) {
-        unsigned char c = buf[x];
-        hex[0] = hexchars[(c >> 4) & 0xF];
-        hex[1] = hexchars[c & 0xF];
-        hex[2] = ' ';
-        hex[3] = '\0';
-        mp_vibeos_api->uart_puts(hex);
-    }
-    mp_vibeos_api->uart_puts("]\n");
-
     // Create lexer from buffer (pass 0 for free_len - we won't free it)
     return mp_lexer_new_from_str_len(filename, buf, size, 0);
 }
@@ -168,13 +147,11 @@ int main(kapi_t *api, int argc, char **argv) {
 
     if (argc > 1) {
         // Run script file - read and execute directly
-        api->uart_puts("[MP] Opening: ");
-        api->uart_puts(argv[1]);
-        api->uart_puts("\n");
-
         void *file = api->open(argv[1]);
         if (!file) {
-            api->uart_puts("[MP] Error: cannot open file\n");
+            api->puts("micropython: cannot open ");
+            api->puts(argv[1]);
+            api->puts("\n");
             mp_deinit();
             return 1;
         }
@@ -189,39 +166,17 @@ int main(kapi_t *api, int argc, char **argv) {
         }
         buf[j] = '\0';
 
-        // Debug hex dump
-        api->uart_puts("[MP] Size after strip: ");
-        char hex[8];
-        const char *hc = "0123456789ABCDEF";
-        hex[0] = hc[(j >> 12) & 0xF];
-        hex[1] = hc[(j >> 8) & 0xF];
-        hex[2] = hc[(j >> 4) & 0xF];
-        hex[3] = hc[j & 0xF];
-        hex[4] = '\n';
-        hex[5] = '\0';
-        api->uart_puts(hex);
-
-        api->uart_puts("[MP] Content:\n");
-        api->uart_puts(buf);
-        api->uart_puts("\n[MP] End content\n");
-
         // Execute using mp_parse_compile_execute with FILE_INPUT mode
-        api->uart_puts("[MP] Creating lexer...\n");
         mp_lexer_t *lex = mp_lexer_new_from_str_len(qstr_from_str(argv[1]), buf, j, 0);
-        api->uart_puts("[MP] Parsing...\n");
 
         nlr_buf_t nlr;
         if (nlr_push(&nlr) == 0) {
             mp_parse_tree_t parse_tree = mp_parse(lex, MP_PARSE_FILE_INPUT);
-            api->uart_puts("[MP] Compiling...\n");
             mp_obj_t module_fun = mp_compile(&parse_tree, lex->source_name, false);
-            api->uart_puts("[MP] Executing...\n");
             mp_call_function_0(module_fun);
             nlr_pop();
-            api->uart_puts("[MP] Done!\n");
         } else {
             // Exception - print it
-            api->uart_puts("[MP] Exception caught\n");
             mp_obj_print_exception(&mp_plat_print, (mp_obj_t)nlr.ret_val);
             ret = 1;
         }
