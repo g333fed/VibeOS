@@ -60,7 +60,7 @@ uint64_t elf_load(const void *data, size_t size) {
     const Elf64_Ehdr *ehdr = (const Elf64_Ehdr *)data;
     const uint8_t *base = (const uint8_t *)data;
 
-    printf("[ELF] Loading %d program headers\n", ehdr->e_phnum);
+    // printf("[ELF] Loading %d program headers\n", ehdr->e_phnum);
 
     // Process program headers
     for (int i = 0; i < ehdr->e_phnum; i++) {
@@ -71,12 +71,12 @@ uint64_t elf_load(const void *data, size_t size) {
             continue;
         }
 
-        printf("[ELF] LOAD: vaddr=0x%lx filesz=0x%lx memsz=0x%lx\n",
-               phdr->p_vaddr, phdr->p_filesz, phdr->p_memsz);
+        // printf("[ELF] LOAD: vaddr=0x%lx filesz=0x%lx memsz=0x%lx\n",
+        //        phdr->p_vaddr, phdr->p_filesz, phdr->p_memsz);
 
         // Copy segment data
         void *dest = (void *)phdr->p_vaddr;
-        printf("[ELF] Copying %lu bytes to %p\n", phdr->p_filesz, dest);
+        // printf("[ELF] Copying %lu bytes to %p\n", phdr->p_filesz, dest);
         const void *src = base + phdr->p_offset;
 
         // Copy file contents
@@ -91,12 +91,12 @@ uint64_t elf_load(const void *data, size_t size) {
         }
     }
 
-    printf("[ELF] Entry point: 0x%lx\n", ehdr->e_entry);
+    // printf("[ELF] Entry point: 0x%lx\n", ehdr->e_entry);
 
     // Debug: dump first few instructions at entry
-    uint32_t *code = (uint32_t *)ehdr->e_entry;
-    printf("[ELF] Code at entry: %08x %08x %08x %08x\n",
-           code[0], code[1], code[2], code[3]);
+    // uint32_t *code = (uint32_t *)ehdr->e_entry;
+    // printf("[ELF] Code at entry: %08x %08x %08x %08x\n",
+    //        code[0], code[1], code[2], code[3]);
 
     return ehdr->e_entry;
 }
@@ -145,7 +145,7 @@ static void elf_process_relocations(uint64_t load_base, const Elf64_Dyn *dynamic
     }
 
     if (rela_addr == 0 || rela_size == 0) {
-        printf("[ELF] No relocations to process\n");
+        // printf("[ELF] No relocations to process\n");
         return;
     }
 
@@ -153,7 +153,7 @@ static void elf_process_relocations(uint64_t load_base, const Elf64_Dyn *dynamic
     const Elf64_Rela *rela = (const Elf64_Rela *)(load_base + rela_addr);
     int num_relas = rela_size / rela_ent;
 
-    printf("[ELF] Processing %d relocations at 0x%lx (rela_addr=0x%lx)\n", num_relas, load_base + rela_addr, rela_addr);
+    // printf("[ELF] Processing %d relocations at 0x%lx (rela_addr=0x%lx)\n", num_relas, load_base + rela_addr, rela_addr);
 
     int applied = 0;
     for (int i = 0; i < num_relas; i++) {
@@ -167,16 +167,16 @@ static void elf_process_relocations(uint64_t load_base, const Elf64_Dyn *dynamic
             *target = load_base + addend;
             applied++;
             // Debug first and last few
-            if (i < 3 || i >= num_relas - 3) {
-                printf("[ELF] Reloc %d: offset=0x%lx target=0x%lx value=0x%lx\n",
-                       i, offset, (uint64_t)target, *target);
-            }
+            // if (i < 3 || i >= num_relas - 3) {
+            //     printf("[ELF] Reloc %d: offset=0x%lx target=0x%lx value=0x%lx\n",
+            //            i, offset, (uint64_t)target, *target);
+            // }
         } else {
             printf("[ELF] Unknown relocation type 0x%lx at offset 0x%lx\n", type, offset);
         }
     }
 
-    printf("[ELF] Applied %d relocations successfully\n", applied);
+    // printf("[ELF] Applied %d relocations successfully\n", applied);
 }
 
 // Load ELF at a specific base address
@@ -191,8 +191,8 @@ int elf_load_at(const void *data, size_t size, uint64_t load_base, elf_load_info
     const uint8_t *base = (const uint8_t *)data;
     int is_pie = (ehdr->e_type == ET_DYN);
 
-    printf("[ELF] Loading %s at 0x%lx (%d program headers)\n",
-           is_pie ? "PIE" : "EXEC", load_base, ehdr->e_phnum);
+    // printf("[ELF] Loading %s at 0x%lx (%d program headers)\n",
+    //        is_pie ? "PIE" : "EXEC", load_base, ehdr->e_phnum);
 
     uint64_t total_size = 0;
     const Elf64_Dyn *dynamic = NULL;
@@ -214,8 +214,8 @@ int elf_load_at(const void *data, size_t size, uint64_t load_base, elf_load_info
         // For EXEC, use vaddr as-is
         uint64_t dest_addr = is_pie ? (load_base + phdr->p_vaddr) : phdr->p_vaddr;
 
-        printf("[ELF] LOAD: vaddr=0x%lx -> 0x%lx filesz=0x%lx memsz=0x%lx\n",
-               phdr->p_vaddr, dest_addr, phdr->p_filesz, phdr->p_memsz);
+        // printf("[ELF] LOAD: vaddr=0x%lx -> 0x%lx filesz=0x%lx memsz=0x%lx\n",
+        //        phdr->p_vaddr, dest_addr, phdr->p_filesz, phdr->p_memsz);
 
         void *dest = (void *)dest_addr;
         const void *src = base + phdr->p_offset;
@@ -227,10 +227,10 @@ int elf_load_at(const void *data, size_t size, uint64_t load_base, elf_load_info
 
         // Zero BSS
         if (phdr->p_memsz > phdr->p_filesz) {
-            uint64_t bss_start = dest_addr + phdr->p_filesz;
+            // uint64_t bss_start = dest_addr + phdr->p_filesz;
             uint64_t bss_size = phdr->p_memsz - phdr->p_filesz;
-            printf("[ELF] Zeroing BSS: 0x%lx - 0x%lx (size 0x%lx)\n",
-                   bss_start, bss_start + bss_size, bss_size);
+            // printf("[ELF] Zeroing BSS: 0x%lx - 0x%lx (size 0x%lx)\n",
+            //        bss_start, bss_start + bss_size, bss_size);
             memset((uint8_t *)dest + phdr->p_filesz, 0, bss_size);
         }
 
@@ -246,7 +246,7 @@ int elf_load_at(const void *data, size_t size, uint64_t load_base, elf_load_info
     // Calculate entry point
     uint64_t entry = is_pie ? (load_base + ehdr->e_entry) : ehdr->e_entry;
 
-    printf("[ELF] Entry point: 0x%lx\n", entry);
+    // printf("[ELF] Entry point: 0x%lx\n", entry);
 
     // Fill info struct
     if (info) {

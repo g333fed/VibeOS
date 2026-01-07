@@ -16,6 +16,7 @@ VibeOS is an operating system written from scratch for ARM64 (aarch64). It runs 
 - FAT32 filesystem with long filename support
 - Memory allocator, process scheduler, interrupt handling
 - GIC-400 (QEMU) and BCM2836/BCM2835 (Pi) interrupt controllers
+- Configurable boot (splash screen, boot target)
 
 **GUI**
 - Desktop environment with draggable windows
@@ -95,6 +96,16 @@ This builds the kernel and all userspace programs, syncs them to the disk image,
 - Click dock icons to launch apps
 - Ctrl+S to save in editors
 - Type `help` in terminal for shell commands
+
+### Boot Configuration
+
+Edit `/etc/boot.cfg` to customize boot behavior:
+
+```
+# VibeOS Boot Configuration
+splash=on       # on/off - show boot splash animation
+boot=desktop    # desktop/vibesh - boot target
+```
 
 ## Running on Raspberry Pi Zero 2W
 

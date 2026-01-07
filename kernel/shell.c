@@ -27,34 +27,102 @@
 #define KEY_PGUP   0x107
 #define KEY_PGDN   0x108
 
+// Boot configuration
+typedef struct {
+    int splash_enabled;      // 1 = show splash, 0 = skip
+    char boot_target[64];    // "/bin/desktop" or "/bin/vibesh"
+} boot_config_t;
+
+static void parse_boot_config(boot_config_t *cfg) {
+    // Defaults
+    cfg->splash_enabled = 1;
+    strcpy(cfg->boot_target, "/bin/desktop");
+
+    // Try to read /etc/boot.cfg
+    vfs_node_t *file = vfs_lookup("/etc/boot.cfg");
+    if (!file) return;
+
+    char buf[256];
+    int len = vfs_read(file, buf, sizeof(buf) - 1, 0);
+    if (len <= 0) return;
+    buf[len] = '\0';
+
+    // Parse line by line
+    char *line = buf;
+    while (line && *line) {
+        char *next = strchr(line, '\n');
+        if (next) *next++ = '\0';
+
+        // Skip comments and empty lines
+        if (*line == '#' || *line == '\0') {
+            line = next;
+            continue;
+        }
+
+        // Parse key=value
+        char *eq = strchr(line, '=');
+        if (eq) {
+            *eq = '\0';
+            char *key = line;
+            char *val = eq + 1;
+
+            if (strcmp(key, "splash") == 0) {
+                cfg->splash_enabled = (strcmp(val, "on") == 0);
+            } else if (strcmp(key, "boot") == 0) {
+                if (strcmp(val, "vibesh") == 0) {
+                    strcpy(cfg->boot_target, "/bin/vibesh");
+                } else {
+                    strcpy(cfg->boot_target, "/bin/desktop");
+                }
+            }
+        }
+        line = next;
+    }
+}
+
 void shell_init(void) {
     // Nothing to initialize
 }
 
 void shell_run(void) {
-    // Try to launch splash screen (which then launches desktop)
-    vfs_node_t *splash = vfs_lookup("/bin/splash");
-    if (splash) {
-        int result = process_exec("/bin/splash");
-        // If splash/desktop exits, show status
-        if (result != 0) {
-            console_puts("\nDesktop exited with status ");
-            printf("%d\n", result);
+    // Parse boot configuration
+    boot_config_t cfg;
+    parse_boot_config(&cfg);
+
+    int result = -1;
+
+    if (cfg.splash_enabled) {
+        // Try splash with boot target as argument
+        vfs_node_t *splash = vfs_lookup("/bin/splash");
+        if (splash) {
+            char *argv[] = { "/bin/splash", cfg.boot_target, NULL };
+            result = process_exec_args("/bin/splash", 2, argv);
         }
-    } else {
-        // Fall back to vibesh if splash not found
-        vfs_node_t *vibesh = vfs_lookup("/bin/vibesh");
-        if (vibesh) {
-            console_puts("Starting vibesh (splash not found)...\n\n");
-            int result = process_exec("/bin/vibesh");
-            console_puts("\nvibesh exited with status ");
-            printf("%d\n", result);
+    }
+
+    // If splash disabled or not found, boot directly to target
+    if (result < 0) {
+        vfs_node_t *target = vfs_lookup(cfg.boot_target);
+        if (target) {
+            result = process_exec(cfg.boot_target);
         } else {
-            console_set_color(COLOR_RED, COLOR_BLACK);
-            console_puts("ERROR: Neither /bin/splash nor /bin/vibesh found!\n");
-            console_set_color(COLOR_WHITE, COLOR_BLACK);
-            console_puts("Make sure to run 'make' to build userspace programs.\n");
+            // Fall back to vibesh if target not found
+            vfs_node_t *vibesh = vfs_lookup("/bin/vibesh");
+            if (vibesh) {
+                console_puts("Boot target not found, starting vibesh...\n\n");
+                result = process_exec("/bin/vibesh");
+            } else {
+                console_set_color(COLOR_RED, COLOR_BLACK);
+                console_puts("ERROR: No bootable target found!\n");
+                console_set_color(COLOR_WHITE, COLOR_BLACK);
+                console_puts("Make sure to run 'make' to build userspace programs.\n");
+            }
         }
+    }
+
+    if (result != 0) {
+        console_puts("\nProgram exited with status ");
+        printf("%d\n", result);
     }
 
     // Fallback: minimal recovery loop

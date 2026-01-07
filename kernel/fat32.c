@@ -774,7 +774,7 @@ int fat32_is_dir(const char *path) {
     }
 
     int result = (entry->attr & FAT_ATTR_DIRECTORY) ? 1 : 0;
-    printf("[FAT32] is_dir(%s): %d\n", path, result);
+    // printf("[FAT32] is_dir(%s): %d\n", path, result);
     return result;
 }
 

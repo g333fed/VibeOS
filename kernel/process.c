@@ -232,10 +232,10 @@ int process_create(const char *path, int argc, char **argv) {
     proc->context.x[21] = (uint64_t)argc;     // x21 = argc
     proc->context.x[22] = (uint64_t)argv;     // x22 = argv
 
-    printf("[PROC] Created process '%s' pid=%d at 0x%lx-0x%lx (slot %d)\n",
-           proc->name, proc->pid, proc->load_base, proc->load_base + proc->load_size, slot);
-    printf("[PROC] Stack at 0x%lx-0x%lx\n",
-           (uint64_t)proc->stack_base, (uint64_t)proc->stack_base + proc->stack_size);
+    // printf("[PROC] Created process '%s' pid=%d at 0x%lx-0x%lx (slot %d)\n",
+    //        proc->name, proc->pid, proc->load_base, proc->load_base + proc->load_size, slot);
+    // printf("[PROC] Stack at 0x%lx-0x%lx\n",
+    //        (uint64_t)proc->stack_base, (uint64_t)proc->stack_base + proc->stack_size);
 
     return proc->pid;
 }
@@ -276,7 +276,7 @@ int process_start(int pid) {
         return -1;
     }
 
-    printf("[PROC] Starting process %d '%s'\n", pid, proc->name);
+    printf("[PROC] Started '%s' pid=%d\n", proc->name, pid);
     return 0;  // Already ready, scheduler will pick it up
 }
 

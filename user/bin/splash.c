@@ -151,10 +151,13 @@ static void draw_progress_bar(int cx, int cy, int width, int height, int progres
 }
 
 int main(kapi_t *kapi, int argc, char **argv) {
-    (void)argc;
-    (void)argv;
-
     api = kapi;
+
+    // Boot target from argv, or default to desktop
+    const char *boot_target = "/bin/desktop";
+    if (argc > 1 && argv[1]) {
+        boot_target = argv[1];
+    }
 
     // Initialize graphics context directly on framebuffer
     gfx_init(&gfx, api->fb_base, api->fb_width, api->fb_height, api->font_data);
@@ -201,8 +204,8 @@ int main(kapi_t *kapi, int argc, char **argv) {
     // Brief pause at 100%
     api->sleep_ms(100);
 
-    // Launch desktop
-    api->exec("/bin/desktop");
+    // Launch boot target
+    api->exec(boot_target);
 
     return 0;
 }
