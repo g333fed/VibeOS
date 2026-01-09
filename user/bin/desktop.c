@@ -129,6 +129,9 @@ static int resize_start_mx, resize_start_my;
 // Desktop running flag
 static int running = 1;
 
+// Classic mode (flat graphics for Pi - no shadows, alpha, rounded corners)
+static int classic_mode = 0;
+
 // Redraw control - skip frames when nothing changed
 static int needs_redraw = 1;        // Full redraw needed
 static int cursor_moved = 0;        // Just cursor position changed
@@ -508,10 +511,15 @@ static void init_dock_positions(void) {
 }
 
 static void draw_dock_icon(dock_icon_t *icon, int icon_idx, int highlight) {
-    // Draw highlight background if hovered - rounded pill
+    // Draw highlight background if hovered
     if (highlight) {
-        bb_fill_rounded_alpha(icon->x - 6, icon->y - 4, DOCK_ICON_SIZE + 12, DOCK_ICON_SIZE + DOCK_LABEL_HEIGHT + 8,
-                              8, COLOR_ACCENT, 40);
+        if (classic_mode) {
+            bb_fill_rect(icon->x - 6, icon->y - 4, DOCK_ICON_SIZE + 12, DOCK_ICON_SIZE + DOCK_LABEL_HEIGHT + 8,
+                         0x00CCCCCC);
+        } else {
+            bb_fill_rounded_alpha(icon->x - 6, icon->y - 4, DOCK_ICON_SIZE + 12, DOCK_ICON_SIZE + DOCK_LABEL_HEIGHT + 8,
+                                  8, COLOR_ACCENT, 40);
+        }
     }
 
     // Draw the bitmap icon with dock background color
@@ -532,15 +540,17 @@ static int minimized_count = 0;
 
 static void draw_dock(void) {
     // Use cached dock pill dimensions
-    // Draw subtle shadow first
-    bb_box_shadow_rounded(dock_pill_x, dock_pill_y, dock_content_w, dock_pill_h, dock_pill_r,
-                          4, 0, 2, 0x00999999);
-
-    // Solid background (no alpha - matches icon/text backgrounds exactly)
-    bb_fill_rounded(dock_pill_x, dock_pill_y, dock_content_w, dock_pill_h, dock_pill_r, COLOR_DOCK_BG);
-
-    // Subtle border
-    bb_draw_rounded(dock_pill_x, dock_pill_y, dock_content_w, dock_pill_h, dock_pill_r, COLOR_DOCK_BORDER);
+    if (classic_mode) {
+        // Classic flat mode: simple rectangle, no shadow
+        bb_fill_rect(dock_pill_x, dock_pill_y, dock_content_w, dock_pill_h, COLOR_DOCK_BG);
+        bb_draw_rect(dock_pill_x, dock_pill_y, dock_content_w, dock_pill_h, COLOR_DOCK_BORDER);
+    } else {
+        // Fancy mode: shadow + rounded corners
+        bb_box_shadow_rounded(dock_pill_x, dock_pill_y, dock_content_w, dock_pill_h, dock_pill_r,
+                              4, 0, 2, 0x00999999);
+        bb_fill_rounded(dock_pill_x, dock_pill_y, dock_content_w, dock_pill_h, dock_pill_r, COLOR_DOCK_BG);
+        bb_draw_rounded(dock_pill_x, dock_pill_y, dock_content_w, dock_pill_h, dock_pill_r, COLOR_DOCK_BORDER);
+    }
 
     // Icons
     for (int i = 0; i < (int)NUM_DOCK_ICONS; i++) {
@@ -571,12 +581,21 @@ static void draw_dock(void) {
                                mouse_y >= min_y && mouse_y < min_y + min_h);
 
                 if (hovering) {
-                    bb_fill_rounded_alpha(min_x - 2, min_y - 2, min_w + 4, min_h + 4, 4, COLOR_ACCENT, 60);
+                    if (classic_mode) {
+                        bb_fill_rect(min_x - 2, min_y - 2, min_w + 4, min_h + 4, 0x00CCCCCC);
+                    } else {
+                        bb_fill_rounded_alpha(min_x - 2, min_y - 2, min_w + 4, min_h + 4, 4, COLOR_ACCENT, 60);
+                    }
                 }
 
                 // Mini window icon
-                bb_fill_rounded(min_x, min_y, min_w, min_h, 4, COLOR_WIN_BG);
-                bb_draw_rounded(min_x, min_y, min_w, min_h, 4, COLOR_WIN_BORDER);
+                if (classic_mode) {
+                    bb_fill_rect(min_x, min_y, min_w, min_h, COLOR_WIN_BG);
+                    bb_draw_rect(min_x, min_y, min_w, min_h, COLOR_WIN_BORDER);
+                } else {
+                    bb_fill_rounded(min_x, min_y, min_w, min_h, 4, COLOR_WIN_BG);
+                    bb_draw_rounded(min_x, min_y, min_w, min_h, 4, COLOR_WIN_BORDER);
+                }
                 // Title bar
                 bb_fill_rect(min_x + 1, min_y + 1, min_w - 2, 8, COLOR_TITLE_ACTIVE);
                 // Mini traffic lights
@@ -608,18 +627,22 @@ static void draw_dock_context_menu(void) {
     int menu_h = 32;
     int menu_x = dock_context_menu_x;
     int menu_y = dock_context_menu_y - menu_h - 8;  // Above the icon
-    int menu_r = 8;
 
     // Clamp to screen
     if (menu_x + menu_w > SCREEN_WIDTH) menu_x = SCREEN_WIDTH - menu_w;
     if (menu_y < MENU_BAR_HEIGHT) menu_y = dock_context_menu_y + 8;
 
-    // Shadow
-    bb_box_shadow_rounded(menu_x, menu_y, menu_w, menu_h, menu_r, 6, 2, 3, 0x00888888);
-
-    // Background
-    bb_fill_rounded_alpha(menu_x, menu_y, menu_w, menu_h, menu_r, 0x00F8F8F8, 250);
-    bb_draw_rounded(menu_x, menu_y, menu_w, menu_h, menu_r, COLOR_DOCK_BORDER);
+    if (classic_mode) {
+        // Classic flat mode
+        bb_fill_rect(menu_x, menu_y, menu_w, menu_h, 0x00F8F8F8);
+        bb_draw_rect(menu_x, menu_y, menu_w, menu_h, COLOR_DOCK_BORDER);
+    } else {
+        // Fancy mode with shadow and rounded corners
+        int menu_r = 8;
+        bb_box_shadow_rounded(menu_x, menu_y, menu_w, menu_h, menu_r, 6, 2, 3, 0x00888888);
+        bb_fill_rounded_alpha(menu_x, menu_y, menu_w, menu_h, menu_r, 0x00F8F8F8, 250);
+        bb_draw_rounded(menu_x, menu_y, menu_w, menu_h, menu_r, COLOR_DOCK_BORDER);
+    }
 
     // "New Window" item
     int item_y = menu_y + 4;
@@ -627,7 +650,11 @@ static void draw_dock_context_menu(void) {
                    mouse_y >= item_y && mouse_y < item_y + 24);
 
     if (hovering) {
-        bb_fill_rounded(menu_x + 4, item_y, menu_w - 8, 24, 4, COLOR_MENU_HIGHLIGHT);
+        if (classic_mode) {
+            bb_fill_rect(menu_x + 4, item_y, menu_w - 8, 24, COLOR_MENU_HIGHLIGHT);
+        } else {
+            bb_fill_rounded(menu_x + 4, item_y, menu_w - 8, 24, 4, COLOR_MENU_HIGHLIGHT);
+        }
         bb_draw_string(menu_x + 12, item_y + 4, "New Window", COLOR_WHITE, COLOR_MENU_HIGHLIGHT);
     } else {
         bb_draw_string(menu_x + 12, item_y + 4, "New Window", COLOR_MENU_TEXT, 0x00F8F8F8);
@@ -724,15 +751,18 @@ static void draw_dropdown_menu(int menu_x, const menu_item_t *items) {
 
     int menu_w = max_width * 8 + 32;  // Padding on sides
     int menu_h = item_count * 24 + 8; // 24px per item + padding
-    int menu_r = 8;  // Corner radius
-
     int menu_y = MENU_BAR_HEIGHT + 4;
 
-    // Draw shadow
-    bb_box_shadow_rounded(menu_x, menu_y, menu_w, menu_h, menu_r, 8, 2, 4, COLOR_BLACK);
-
-    // Draw menu background (translucent)
-    bb_fill_rounded_alpha(menu_x, menu_y, menu_w, menu_h, menu_r, 0x00F8F8F8, 245);
+    if (classic_mode) {
+        // Classic flat mode
+        bb_fill_rect(menu_x, menu_y, menu_w, menu_h, 0x00F8F8F8);
+        bb_draw_rect(menu_x, menu_y, menu_w, menu_h, COLOR_WIN_BORDER);
+    } else {
+        // Fancy mode with shadow and rounded corners
+        int menu_r = 8;
+        bb_box_shadow_rounded(menu_x, menu_y, menu_w, menu_h, menu_r, 8, 2, 4, COLOR_BLACK);
+        bb_fill_rounded_alpha(menu_x, menu_y, menu_w, menu_h, menu_r, 0x00F8F8F8, 245);
+    }
 
     // Draw items
     int y = menu_y + 4;
@@ -747,7 +777,11 @@ static void draw_dropdown_menu(int menu_x, const menu_item_t *items) {
                            mouse_x >= menu_x + 4 && mouse_x < menu_x + menu_w - 4);
 
             if (hovering) {
-                bb_fill_rounded(menu_x + 4, item_y, menu_w - 8, 22, 4, COLOR_MENU_HIGHLIGHT);
+                if (classic_mode) {
+                    bb_fill_rect(menu_x + 4, item_y, menu_w - 8, 22, COLOR_MENU_HIGHLIGHT);
+                } else {
+                    bb_fill_rounded(menu_x + 4, item_y, menu_w - 8, 22, 4, COLOR_MENU_HIGHLIGHT);
+                }
                 bb_draw_string(menu_x + 16, item_y + 4, items[i].label, COLOR_WHITE, COLOR_MENU_HIGHLIGHT);
             } else {
                 bb_draw_string(menu_x + 16, item_y + 4, items[i].label, COLOR_MENU_TEXT, 0x00F8F8F8);
@@ -758,8 +792,12 @@ static void draw_dropdown_menu(int menu_x, const menu_item_t *items) {
 }
 
 static void draw_menu_bar(void) {
-    // Translucent background with subtle gradient
-    bb_fill_rect_alpha(0, 0, SCREEN_WIDTH, MENU_BAR_HEIGHT, COLOR_MENU_BG, 220);
+    // Background
+    if (classic_mode) {
+        bb_fill_rect(0, 0, SCREEN_WIDTH, MENU_BAR_HEIGHT, COLOR_MENU_BG);
+    } else {
+        bb_fill_rect_alpha(0, 0, SCREEN_WIDTH, MENU_BAR_HEIGHT, COLOR_MENU_BG, 220);
+    }
 
     // Subtle bottom shadow line
     bb_draw_hline(0, MENU_BAR_HEIGHT - 1, SCREEN_WIDTH, 0x00CCCCCC);
@@ -768,7 +806,11 @@ static void draw_menu_bar(void) {
 
     // VibeOS logo in menu bar (highlighted if menu open)
     if (open_menu == MENU_APPLE) {
-        bb_fill_rounded(APPLE_MENU_X - 4, 4, APPLE_MENU_W + 8, MENU_BAR_HEIGHT - 8, 4, COLOR_MENU_HIGHLIGHT);
+        if (classic_mode) {
+            bb_fill_rect(APPLE_MENU_X - 4, 4, APPLE_MENU_W + 8, MENU_BAR_HEIGHT - 8, COLOR_MENU_HIGHLIGHT);
+        } else {
+            bb_fill_rounded(APPLE_MENU_X - 4, 4, APPLE_MENU_W + 8, MENU_BAR_HEIGHT - 8, 4, COLOR_MENU_HIGHLIGHT);
+        }
         // Draw inverted logo
         for (int py = 0; py < 16; py++) {
             for (int px = 0; px < 16; px++) {
@@ -789,7 +831,11 @@ static void draw_menu_bar(void) {
 
     // File menu
     if (open_menu == MENU_FILE) {
-        bb_fill_rounded(FILE_MENU_X - 6, 4, FILE_MENU_W + 12, MENU_BAR_HEIGHT - 8, 4, COLOR_MENU_HIGHLIGHT);
+        if (classic_mode) {
+            bb_fill_rect(FILE_MENU_X - 6, 4, FILE_MENU_W + 12, MENU_BAR_HEIGHT - 8, COLOR_MENU_HIGHLIGHT);
+        } else {
+            bb_fill_rounded(FILE_MENU_X - 6, 4, FILE_MENU_W + 12, MENU_BAR_HEIGHT - 8, 4, COLOR_MENU_HIGHLIGHT);
+        }
         bb_draw_string(FILE_MENU_X, text_y, "File", COLOR_WHITE, COLOR_MENU_HIGHLIGHT);
     } else {
         bb_draw_string(FILE_MENU_X, text_y, "File", COLOR_MENU_TEXT, COLOR_MENU_BG);
@@ -797,7 +843,11 @@ static void draw_menu_bar(void) {
 
     // Edit menu
     if (open_menu == MENU_EDIT) {
-        bb_fill_rounded(EDIT_MENU_X - 6, 4, EDIT_MENU_W + 12, MENU_BAR_HEIGHT - 8, 4, COLOR_MENU_HIGHLIGHT);
+        if (classic_mode) {
+            bb_fill_rect(EDIT_MENU_X - 6, 4, EDIT_MENU_W + 12, MENU_BAR_HEIGHT - 8, COLOR_MENU_HIGHLIGHT);
+        } else {
+            bb_fill_rounded(EDIT_MENU_X - 6, 4, EDIT_MENU_W + 12, MENU_BAR_HEIGHT - 8, 4, COLOR_MENU_HIGHLIGHT);
+        }
         bb_draw_string(EDIT_MENU_X, text_y, "Edit", COLOR_WHITE, COLOR_MENU_HIGHLIGHT);
     } else {
         bb_draw_string(EDIT_MENU_X, text_y, "Edit", COLOR_MENU_TEXT, COLOR_MENU_BG);
@@ -873,36 +923,44 @@ static void draw_window(int wid) {
 
     int is_focused = (wid == focused_window);
 
-    // Draw subtle shadow behind window
-    bb_box_shadow_rounded(w->x, w->y, w->w, w->h, CORNER_RADIUS,
-                          SHADOW_BLUR, SHADOW_OFFSET, SHADOW_OFFSET, COLOR_SHADOW);
+    if (classic_mode) {
+        // Classic flat mode: simple rectangles, no shadow
+        bb_fill_rect(w->x, w->y, w->w, w->h, COLOR_WIN_BG);
+        bb_draw_rect(w->x, w->y, w->w, w->h, COLOR_WIN_BORDER);
 
-    // Window background with rounded corners
-    bb_fill_rounded(w->x, w->y, w->w, w->h, CORNER_RADIUS, COLOR_WIN_BG);
-    // Light border
-    bb_draw_rounded(w->x, w->y, w->w, w->h, CORNER_RADIUS, COLOR_WIN_BORDER);
+        // Solid title bar (no gradient)
+        uint32_t title_color = is_focused ? 0x00DDDDDD : 0x00E8E8E8;
+        bb_fill_rect(w->x + 1, w->y + 1, w->w - 2, TITLE_BAR_HEIGHT - 1, title_color);
+    } else {
+        // Fancy mode: shadow + rounded corners + gradient title bar
+        bb_box_shadow_rounded(w->x, w->y, w->w, w->h, CORNER_RADIUS,
+                              SHADOW_BLUR, SHADOW_OFFSET, SHADOW_OFFSET, COLOR_SHADOW);
+        bb_fill_rounded(w->x, w->y, w->w, w->h, CORNER_RADIUS, COLOR_WIN_BG);
+        bb_draw_rounded(w->x, w->y, w->w, w->h, CORNER_RADIUS, COLOR_WIN_BORDER);
 
-    // Title bar gradient
-    uint32_t title_top = is_focused ? 0x00E8E8E8 : 0x00F5F5F5;
-    uint32_t title_bot = is_focused ? 0x00D0D0D0 : 0x00E8E8E8;
+        // Title bar gradient (using precomputed corner insets)
+        uint32_t title_top = is_focused ? 0x00E8E8E8 : 0x00F5F5F5;
+        uint32_t title_bot = is_focused ? 0x00D0D0D0 : 0x00E8E8E8;
 
-    // Fill title bar area (using precomputed corner insets)
-    for (int py = 0; py < TITLE_BAR_HEIGHT; py++) {
-        uint8_t t = (py * 255) / (TITLE_BAR_HEIGHT > 1 ? TITLE_BAR_HEIGHT - 1 : 1);
-        uint32_t color = gfx_lerp_color(title_top, title_bot, t);
+        for (int py = 0; py < TITLE_BAR_HEIGHT; py++) {
+            uint8_t t = (py * 255) / (TITLE_BAR_HEIGHT > 1 ? TITLE_BAR_HEIGHT - 1 : 1);
+            uint32_t color = gfx_lerp_color(title_top, title_bot, t);
 
-        int start_x = w->x;
-        int end_x = w->x + w->w;
+            int start_x = w->x;
+            int end_x = w->x + w->w;
 
-        // Use precomputed corner insets
-        if (py < CORNER_RADIUS) {
-            int inset = corner_insets[py];
-            start_x += inset;
-            end_x -= inset;
+            if (py < CORNER_RADIUS) {
+                int inset = corner_insets[py];
+                start_x += inset;
+                end_x -= inset;
+            }
+
+            bb_draw_hline(start_x, w->y + py, end_x - start_x, color);
         }
-
-        bb_draw_hline(start_x, w->y + py, end_x - start_x, color);
     }
+
+    // Title bar solid color for text background (used in classic mode)
+    uint32_t title_bg = is_focused ? 0x00DDDDDD : 0x00E8E8E8;
 
     // Separator line below title bar
     bb_draw_hline(w->x, w->y + TITLE_BAR_HEIGHT, w->w, 0x00BBBBBB);
@@ -931,11 +989,11 @@ static void draw_window(int wid) {
     int title_len = strlen(w->title);
     int title_x = w->x + (w->w - title_len * 8) / 2;
     int title_y = w->y + (TITLE_BAR_HEIGHT - 16) / 2;
-    bb_draw_string(title_x, title_y, w->title, COLOR_TITLE_TEXT, title_bot);
+    bb_draw_string(title_x, title_y, w->title, COLOR_TITLE_TEXT, title_bg);
 
     // Content area - copy from window buffer
     int content_y = w->y + TITLE_BAR_HEIGHT + 1;
-    int content_h = w->h - TITLE_BAR_HEIGHT - CORNER_RADIUS - 1;
+    int content_h = w->h - TITLE_BAR_HEIGHT - (classic_mode ? 1 : CORNER_RADIUS) - 1;
     int content_w = w->w - 2;
     int content_x = w->x + 1;
 
@@ -1166,13 +1224,17 @@ static void flip_buffer(void) {
 static void draw_about_dialog(void) {
     int x = ABOUT_X;
     int y = ABOUT_Y;
-    int r = 12;  // Corner radius
 
-    // Shadow (subtle, like regular windows)
-    bb_box_shadow_rounded(x, y, ABOUT_W, ABOUT_H, r, 4, 2, 2, COLOR_SHADOW);
-
-    // Background (translucent white)
-    bb_fill_rounded_alpha(x, y, ABOUT_W, ABOUT_H, r, 0x00FAFAFA, 250);
+    if (classic_mode) {
+        // Classic flat mode
+        bb_fill_rect(x, y, ABOUT_W, ABOUT_H, 0x00FAFAFA);
+        bb_draw_rect(x, y, ABOUT_W, ABOUT_H, COLOR_WIN_BORDER);
+    } else {
+        // Fancy mode
+        int r = 12;
+        bb_box_shadow_rounded(x, y, ABOUT_W, ABOUT_H, r, 4, 2, 2, COLOR_SHADOW);
+        bb_fill_rounded_alpha(x, y, ABOUT_W, ABOUT_H, r, 0x00FAFAFA, 250);
+    }
 
     // Draw a big VibeOS logo in the dialog (3x size) - optimized with fill_rect
     int logo_x = x + (ABOUT_W - 48) / 2;  // 16*3 = 48
@@ -1263,20 +1325,24 @@ static void draw_about_dialog(void) {
     int up_x = x + (ABOUT_W - strlen(up_str) * 8) / 2;
     bb_draw_string(up_x, y + 150, up_str, 0x00555555, 0x00FAFAFA);
 
-    // OK button - modern rounded style
+    // OK button
     int btn_w = 80;
     int btn_h = 28;
     int btn_x = x + (ABOUT_W - btn_w) / 2;
     int btn_y = y + ABOUT_H - 45;
-    int btn_r = 6;
 
     int hovering = (mouse_x >= btn_x && mouse_x < btn_x + btn_w &&
                    mouse_y >= btn_y && mouse_y < btn_y + btn_h);
 
-    // Gray button (not blue)
     uint32_t btn_bg = hovering ? 0x00CCCCCC : 0x00E0E0E0;
-    bb_fill_rounded(btn_x, btn_y, btn_w, btn_h, btn_r, btn_bg);
-    bb_draw_rounded(btn_x, btn_y, btn_w, btn_h, btn_r, 0x00AAAAAA);  // Subtle border
+    if (classic_mode) {
+        bb_fill_rect(btn_x, btn_y, btn_w, btn_h, btn_bg);
+        bb_draw_rect(btn_x, btn_y, btn_w, btn_h, 0x00AAAAAA);
+    } else {
+        int btn_r = 6;
+        bb_fill_rounded(btn_x, btn_y, btn_w, btn_h, btn_r, btn_bg);
+        bb_draw_rounded(btn_x, btn_y, btn_w, btn_h, btn_r, 0x00AAAAAA);
+    }
     int ok_x = btn_x + (btn_w - 16) / 2;
     bb_draw_string(ok_x, btn_y + 6, "OK", COLOR_MENU_TEXT, btn_bg);
 }
@@ -1757,6 +1823,12 @@ int main(kapi_t *kapi, int argc, char **argv) {
 
     // Initialize graphics context
     gfx_init(&gfx, backbuffer, SCREEN_WIDTH, SCREEN_HEIGHT, api->font_data);
+
+    // Detect Pi (has DMA) and enable classic flat mode for performance
+    if (api->dma_available && api->dma_available()) {
+        classic_mode = 1;
+        api->puts("Desktop: classic mode (Pi detected)\n");
+    }
 
     // Initialize
     init_dock_positions();

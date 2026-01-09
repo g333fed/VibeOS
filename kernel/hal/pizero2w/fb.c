@@ -170,7 +170,7 @@ static void *bus_to_arm(uint32_t bus) {
 int hal_fb_init(uint32_t width, uint32_t height) {
     debug_puts("[HAL/FB] Pi framebuffer init\n");
 
-    // Use 1080p on Pi - D-cache is now enabled after boot
+    // Use 1080p on Pi - flat mode should make this fast enough
     (void)width;
     (void)height;
     width = 1920;
