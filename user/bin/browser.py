@@ -60,6 +60,7 @@ WELCOME_PAGE = '''<!DOCTYPE html>
 <li><a href="http://example.com">example.com</a> - A simple test page</li>
 <li><a href="http://info.cern.ch">info.cern.ch</a> - The first website ever</li>
 <li><a href="http://motherfuckingwebsite.com">motherfuckingwebsite.com</a> - One of the few pages that can be rendered by VibeOS browser</li>
+<li><a href="http://biskupova.370.network">biskupova.370.network</a> - One of the glory holes of internet, also working here</li>
 </ul>
 <hr>
 <p>Tip: Click the address bar to type a URL, press Enter to navigate.</p>
@@ -1095,3 +1096,4 @@ def main():
     return browser.run(url)
 
 main()
+
