@@ -1,7 +1,13 @@
 # DOOM for VibeOS - Makefile
 # Builds doomgeneric as a VibeOS userspace program
 
-CROSS_COMPILE ?= aarch64-elf-
+# Cross compiler (inherit from parent or auto-detect)
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+    CROSS_COMPILE ?= aarch64-elf-
+else
+    CROSS_COMPILE ?= aarch64-linux-gnu-
+endif
 CC = $(CROSS_COMPILE)gcc
 LD = $(CROSS_COMPILE)ld
 OBJCOPY = $(CROSS_COMPILE)objcopy

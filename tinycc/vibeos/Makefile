@@ -1,11 +1,17 @@
 # TCC for VibeOS - Makefile
 
-# Cross compiler
-CC = aarch64-elf-gcc
-AS = aarch64-elf-as
-AR = aarch64-elf-ar
-LD = aarch64-elf-ld
-OBJCOPY = aarch64-elf-objcopy
+# Cross compiler (inherit from parent or auto-detect)
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+    CROSS_COMPILE ?= aarch64-elf-
+else
+    CROSS_COMPILE ?= aarch64-linux-gnu-
+endif
+CC = $(CROSS_COMPILE)gcc
+AS = $(CROSS_COMPILE)as
+AR = $(CROSS_COMPILE)ar
+LD = $(CROSS_COMPILE)ld
+OBJCOPY = $(CROSS_COMPILE)objcopy
 
 # Output
 TARGET = tcc

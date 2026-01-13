@@ -20,6 +20,7 @@ ifeq ($(UNAME_S),Darwin)
 else
     CROSS_COMPILE ?= aarch64-linux-gnu-
 endif
+export CROSS_COMPILE
 CC = $(CROSS_COMPILE)gcc
 AS = $(CROSS_COMPILE)as
 LD = $(CROSS_COMPILE)ld

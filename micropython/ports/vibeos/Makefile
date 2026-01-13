@@ -3,8 +3,13 @@
 
 include ../../py/mkenv.mk
 
-# Cross-compilation for aarch64
-CROSS_COMPILE ?= aarch64-elf-
+# Cross-compilation for aarch64 (inherit from parent or auto-detect)
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+    CROSS_COMPILE ?= aarch64-elf-
+else
+    CROSS_COMPILE ?= aarch64-linux-gnu-
+endif
 
 # qstr definitions (must come before including py.mk)
 QSTR_DEFS = qstrdefsport.h
@@ -77,6 +82,9 @@ OBJ += $(addprefix $(BUILD)/, $(SRC_EXTMOD_C:.c=.o))
 OBJ += $(addprefix $(BUILD)/, $(SRC_S:.S=.o))
 
 all: $(BUILD)/micropython.elf
+
+$(BUILD):
+	$(Q)mkdir -p $@
 
 $(CRT0_OBJ): $(CRT0) | $(BUILD)
 	$(CC) -c $< -o $@
