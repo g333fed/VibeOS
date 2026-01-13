@@ -28,16 +28,16 @@ INC += -I../../../kernel/libc
 CFLAGS += $(INC) -ffreestanding -nostdlib -nostartfiles
 CFLAGS += -mcpu=cortex-a72 -mstrict-align
 CFLAGS += -fPIE
-CFLAGS += -Wall -std=gnu99
+CFLAGS += -Wall -Wno-unused-variable -Wno-unused-function -std=gnu99
 CFLAGS += -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers
 CFLAGS += -Wno-implicit-function-declaration -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast
 CFLAGS += -Wno-int-conversion
-CFLAGS += -O0 -DNDEBUG -DMP_FALLTHROUGH=
+CFLAGS += -O0 -DNDEBUG
 CFLAGS += -fdata-sections -ffunction-sections
 CFLAGS += -include stddef.h -include stdint.h -include stdbool.h -include string.h -include errno.h -include stdio.h -include setjmp.h -include math.h
 
-# Linker flags
-LDFLAGS += -nostdlib -pie -T ../../../user/linker.ld
+# Linker flags (override inherited LDFLAGS from parent make)
+LDFLAGS = -nostdlib -pie -T ../../../user/linker.ld
 LDFLAGS += --gc-sections
 
 # Find libgcc for soft-float support

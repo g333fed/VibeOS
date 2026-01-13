@@ -90,13 +90,13 @@ DISK_IMG = disk.img
 DISK_SIZE = 1024
 
 # Compiler flags
-CFLAGS = -ffreestanding -nostdlib -nostartfiles -mcpu=$(CPU) -mstrict-align -Wall -Wextra -O3 -I$(KERNEL_DIR) -I$(KERNEL_DIR)/libc $(CFLAGS_TARGET)
+CFLAGS = -ffreestanding -nostdlib -nostartfiles -mcpu=$(CPU) -mstrict-align -Wall -Wextra -Wno-unused-variable -Wno-unused-function -O3 -I$(KERNEL_DIR) -I$(KERNEL_DIR)/libc $(CFLAGS_TARGET)
 TLS_CFLAGS = -ffreestanding -nostdlib -nostartfiles -mcpu=$(CPU) -mstrict-align -O2 -I$(KERNEL_DIR) -I$(KERNEL_DIR)/libc -w $(CFLAGS_TARGET)
 ASFLAGS = -mcpu=$(CPU)
 LDFLAGS = -nostdlib -T $(LINKER_SCRIPT)
 
 # Userspace compiler flags
-USER_CFLAGS = -ffreestanding -nostdlib -nostartfiles -mcpu=$(CPU) -mstrict-align -fPIE -Wall -Wextra -O3 -I$(USER_DIR)/lib
+USER_CFLAGS = -ffreestanding -nostdlib -nostartfiles -mcpu=$(CPU) -mstrict-align -fPIE -Wall -Wextra -Wno-unused-variable -Wno-unused-function -O3 -I$(USER_DIR)/lib
 USER_LDFLAGS = -nostdlib -pie -T user/linker.ld
 
 # QEMU settings (audio backend varies by OS)

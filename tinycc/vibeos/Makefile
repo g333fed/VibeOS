@@ -17,7 +17,7 @@ TCC_ROOT = ..
 PORT_DIR = .
 
 # Compiler flags
-CFLAGS = -O0 -g -Wall
+CFLAGS = -O0 -g -Wall -Wno-unused-variable -Wno-unused-function
 CFLAGS += -ffreestanding -nostdlib -nostdinc
 CFLAGS += -fPIE -fno-builtin
 CFLAGS += -mstrict-align
