@@ -1,6 +1,6 @@
 # VibeOS
 
-A hobby OS vibecoded completelty from scratch with Claude Code.
+A hobby OS vibecoded completely from scratch with Claude Code.
 Not everything works, some stuff is not even tested, but most things do. 
 ![VibeOS Desktop](screenshots/desktop.png)
 
@@ -191,3 +191,4 @@ The development of VibeOS is documented across 64 sessions:
 - [Session Log 4](SESSION_LOG_4.md) - Sessions 33-49: TLS/HTTPS, Pi port, USB driver, optimizations
 - [Session Log 5](SESSION_LOG_5.md) - Sessions 50-55: USB fixes, DMA, performance tuning
 - [Session Log 6](SESSION_LOG_6.md) - Sessions 56-64: MicroPython, TCC, DOOM, VibeCode, polish
+
