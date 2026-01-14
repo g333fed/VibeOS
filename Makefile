@@ -236,10 +236,6 @@ disk: $(DISK_IMG)
 sync-disk: user $(DISK_IMG)
 ifeq ($(UNAME_S),Darwin)
 	@hdiutil attach $(DISK_IMG) -nobrowse -mountpoint /tmp/vibeos_mount > /dev/null
-else
-	@mkdir -p /tmp/vibeos_mount
-	@sudo mount -o loop $(DISK_IMG) /tmp/vibeos_mount
-endif
 	@rsync -a $(SYSROOT)/ /tmp/vibeos_mount/
 	@mkdir -p /tmp/vibeos_mount/usr/src
 	@rsync -a --exclude='*.o' --exclude='*.elf' --exclude='build/' user/ /tmp/vibeos_mount/usr/src/user/
@@ -259,13 +255,34 @@ endif
 	@cp tinycc/vibeos/libc.a /tmp/vibeos_mount/lib/tcc/lib/
 	@cp tinycc/vibeos/libc.a /tmp/vibeos_mount/lib/tcc/lib/libc.so
 	@cp user/linker.ld /tmp/vibeos_mount/lib/tcc/lib/
-ifeq ($(UNAME_S),Darwin)
 	@dot_clean /tmp/vibeos_mount 2>/dev/null || true
 	@find /tmp/vibeos_mount -name '._*' -delete 2>/dev/null || true
 	@find /tmp/vibeos_mount -name '.DS_Store' -delete 2>/dev/null || true
 	@rm -rf /tmp/vibeos_mount/.fseventsd /tmp/vibeos_mount/.Spotlight-V100 /tmp/vibeos_mount/.Trashes 2>/dev/null || true
 	@hdiutil detach /tmp/vibeos_mount > /dev/null
 else
+	@# Mount disk image and sync files (requires sudo)
+	@mkdir -p /tmp/vibeos_mount
+	@sudo mount -o loop $(DISK_IMG) /tmp/vibeos_mount
+	@sudo rsync -a --no-owner --no-group $(SYSROOT)/ /tmp/vibeos_mount/
+	@sudo mkdir -p /tmp/vibeos_mount/usr/src
+	@sudo rsync -a --no-owner --no-group --exclude='*.o' --exclude='*.elf' --exclude='build/' user/ /tmp/vibeos_mount/usr/src/user/
+	@sudo rsync -a --no-owner --no-group --exclude='*.o' --exclude='build/' tinycc/ /tmp/vibeos_mount/usr/src/tinycc/
+	@sudo mkdir -p /tmp/vibeos_mount/games
+	@sudo mkdir -p /tmp/vibeos_mount/lib/tcc/include
+	@sudo mkdir -p /tmp/vibeos_mount/lib/tcc/lib
+	@sudo cp -r tinycc/include/* /tmp/vibeos_mount/lib/tcc/include/
+	@sudo cp tinycc/vibeos/tcc_include/* /tmp/vibeos_mount/lib/tcc/include/ 2>/dev/null || true
+	@sudo cp user/lib/vibe.h /tmp/vibeos_mount/lib/tcc/include/
+	@sudo cp user/lib/gfx.h /tmp/vibeos_mount/lib/tcc/include/ 2>/dev/null || true
+	@sudo cp $(BUILD_DIR)/user/crt0.o /tmp/vibeos_mount/lib/tcc/lib/crt1.o
+	@sudo cp $(BUILD_DIR)/user/crt0.o /tmp/vibeos_mount/lib/tcc/lib/Scrt1.o
+	@sudo cp $(BUILD_DIR)/user/crti.o /tmp/vibeos_mount/lib/tcc/lib/
+	@sudo cp $(BUILD_DIR)/user/crtn.o /tmp/vibeos_mount/lib/tcc/lib/
+	@sudo cp tinycc/vibeos/libtcc1.a /tmp/vibeos_mount/lib/tcc/lib/
+	@sudo cp tinycc/vibeos/libc.a /tmp/vibeos_mount/lib/tcc/lib/
+	@sudo cp tinycc/vibeos/libc.a /tmp/vibeos_mount/lib/tcc/lib/libc.so
+	@sudo cp user/linker.ld /tmp/vibeos_mount/lib/tcc/lib/
 	@sudo umount /tmp/vibeos_mount
 endif
 
