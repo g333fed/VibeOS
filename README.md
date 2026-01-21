@@ -8,6 +8,11 @@ Not everything works, some stuff is not even tested, but most things do.
 
 VibeOS is an operating system written from scratch for ARM64 (aarch64). It runs on QEMU and real Raspberry Pi Zero 2W. The entire OS was built in collaboration with Claude over 64 sessions, documented in the [session logs](SESSION_LOG_1.md).
 
+## Compile error due to missing tlse.c?
+cd vendor/
+
+git clone https://github.com/kaansenol5/tlse
+
 
 ## Features
 
@@ -191,4 +196,5 @@ The development of VibeOS is documented across 64 sessions:
 - [Session Log 4](SESSION_LOG_4.md) - Sessions 33-49: TLS/HTTPS, Pi port, USB driver, optimizations
 - [Session Log 5](SESSION_LOG_5.md) - Sessions 50-55: USB fixes, DMA, performance tuning
 - [Session Log 6](SESSION_LOG_6.md) - Sessions 56-64: MicroPython, TCC, DOOM, VibeCode, polish
+
 
