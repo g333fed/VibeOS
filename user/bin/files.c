@@ -63,6 +63,10 @@ static int menu_visible = 0;
 static int menu_x, menu_y;
 static int menu_hover = -1;
 
+// Error message (shown briefly)
+static char error_msg[80] = {0};
+static uint32_t error_tick = 0;
+
 // Rename/create state
 static int renaming = 0;
 static char rename_buf[64];
@@ -80,6 +84,8 @@ static const char *menu_items[] = {
     "Open Terminal Here"
 };
 #define MENU_ITEM_COUNT 6
+
+static void draw_all(void);
 
 // ============ Drawing Helpers (macros wrapping gfx lib) ============
 
@@ -151,6 +157,17 @@ static int ext_match(const char *ext, const char *target) {
     return (*ext == 0 && *target == 0);
 }
 
+// Show error message for 3 seconds
+static void show_error(const char *msg) {
+    int i = 0;
+    while (msg[i] && i < 79) {
+        error_msg[i] = msg[i];
+        i++;
+    }
+    error_msg[i] = 0;
+    error_tick = api->get_uptime_ticks();
+}
+
 // Check if file contents are text (not binary)
 // Reads first 512 bytes and checks for null bytes / control chars
 static int is_text_file(const char *path) {
@@ -158,21 +175,31 @@ static int is_text_file(const char *path) {
     if (!file) return 0;
 
     int size = api->file_size(file);
-    if (size <= 0) return 1;  // Empty file counts as text
+    if (size <= 0) {
+        api->close(file);
+        return 1;  // Empty file counts as text
+    }
 
     // Read first 512 bytes
     char buf[512];
     int to_read = size < 512 ? size : 512;
     int n = api->read(file, buf, to_read, 0);
-    if (n <= 0) return 1;
+    if (n <= 0) {
+        api->close(file);
+        return 1;
+    }
 
     // Check for binary indicators
     int non_printable = 0;
+    int is_text = 1;
     for (int i = 0; i < n; i++) {
         unsigned char c = (unsigned char)buf[i];
 
         // Null byte = definitely binary
-        if (c == 0) return 0;
+        if (c == 0) {
+            is_text = 0;
+            break;
+        }
 
         // Count non-printable chars (excluding common whitespace)
         if (c < 32 && c != '\t' && c != '\n' && c != '\r') {
@@ -186,9 +213,12 @@ static int is_text_file(const char *path) {
     }
 
     // If more than 10% non-printable, probably binary
-    if (non_printable * 10 > n) return 0;
+    if (is_text && non_printable * 10 > n) {
+        is_text = 0;
+    }
 
-    return 1;
+    api->close(file);
+    return is_text;
 }
 
 // Open file with appropriate app based on type
@@ -225,7 +255,8 @@ static void open_file(const char *path, const char *filename) {
     }
 
     // Binary file - can't open
-    // TODO: Show "Cannot open binary file" dialog
+    show_error("Cannot open binary file.");
+    draw_all();
 }
 
 // ============ Recursive Delete (userspace implementation) ============
@@ -276,6 +307,8 @@ static int delete_recursive(const char *path) {
         }
     }
 
+    api->close(dir);
+
     // Now delete all collected entries
     for (int i = 0; i < name_count; i++) {
         // Build child path
@@ -304,6 +337,9 @@ static void refresh_directory(void) {
 
     void *dir = api->open(current_path);
     if (!dir || !api->is_dir(dir)) {
+        if (dir) {
+            api->close(dir);
+        }
         return;
     }
 
@@ -332,6 +368,7 @@ static void refresh_directory(void) {
         idx++;
     }
 
+    api->close(dir);
     scroll_offset = 0;
 }
 
@@ -462,7 +499,9 @@ static void action_delete(void) {
     build_item_path(selected_idx, path, sizeof(path));
 
     // Use userspace recursive delete - works for both files and directories
-    delete_recursive(path);
+    if (delete_recursive(path) != 0) {
+        show_error("Delete failed.");
+    }
 
     refresh_directory();
 }
@@ -524,9 +563,15 @@ static void finish_rename(void) {
         strcat(path, rename_buf);
 
         if (creating_new == 1) {
-            api->create(path);
+            if (!api->create(path)) {
+                show_error("Failed to create file.");
+                item_count--;
+            }
         } else {
-            api->mkdir(path);
+            if (!api->mkdir(path)) {
+                show_error("Failed to create folder.");
+                item_count--;
+            }
         }
 
         creating_new = 0;
@@ -539,7 +584,9 @@ static void finish_rename(void) {
         char path[256];
         build_item_path(selected_idx, path, sizeof(path));
 
-        api->rename(path, rename_buf);
+        if (api->rename(path, rename_buf) != 0) {
+            show_error("Rename failed.");
+        }
         refresh_directory();
     }
 }
@@ -670,10 +717,32 @@ static void draw_context_menu(void) {
     }
 }
 
+static void draw_error_message(void) {
+    if (error_msg[0] == 0) return;
+
+    uint32_t now = api->get_uptime_ticks();
+    if (now - error_tick > 300) {
+        error_msg[0] = 0;
+        return;
+    }
+
+    int msg_w = (int)strlen(error_msg) * 8 + 24;
+    if (msg_w > win_w - 20) msg_w = win_w - 20;
+    int msg_h = 24;
+    int msg_x = (win_w - msg_w) / 2;
+    int msg_y = win_h - msg_h - 6;
+
+    buf_fill_rounded(msg_x + 2, msg_y + 2, msg_w, msg_h, 6, 0x00666666);
+    buf_fill_rounded(msg_x, msg_y, msg_w, msg_h, 6, COLOR_MENU_BG);
+    buf_draw_rounded(msg_x, msg_y, msg_w, msg_h, 6, COLOR_BORDER);
+    buf_draw_string_clip(msg_x + 12, msg_y + 4, error_msg, COLOR_FG, COLOR_MENU_BG, msg_w - 16);
+}
+
 static void draw_all(void) {
     draw_path_bar();
     draw_file_list();
     draw_context_menu();
+    draw_error_message();
     api->window_invalidate(window_id);
 }
 
